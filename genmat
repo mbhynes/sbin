@@ -1,0 +1,128 @@
+#!/bin/bash
+
+spark_dir() {
+	echo "$1"_"$(basename $(mktemp -u))" | tr 'A-Z' 'a-z' | tr '-' '_'
+}
+
+# parse commandline arguments
+GETOPT_STRING="osrvVADc:a:n:m:b:M:"
+while getopts $GETOPT_STRING opt
+do
+	case $opt in
+		o)
+			obj_file_flag="--obj"
+			;;
+		s)
+			spd_flag="--spd"
+			;;
+		r)
+			rand_flag="--rand"
+			;;
+		v)
+			verbose_flag="true"
+			;;
+		V)
+			vector_flag="--vec"
+			;;
+		A)
+			matrix_flag="--mat"
+			;;
+		D)
+			diag_flag="--diag"
+			;;
+		c)
+			cores_flag="--cores $OPTARG"
+			;;
+		a)
+			fill_flag="--val $OPTARG"
+			;;
+		n)
+			nrows_flag="--rows $OPTARG"
+			;;
+		m)
+			ncols_flag="--cols $OPTARG"
+			;;
+		b)
+			bsize_flag="--bsize $OPTARG"
+			;;
+		M)
+			SLAVE_MEM="$OPTARG"
+			;;
+		:)
+			echo "-$opt requires argument"
+			exit 1
+			;;
+		\?) 
+			echo "invalid option -$opt" 1>&2
+			;;
+	esac
+done
+shift $((OPTIND-1))
+
+if (($# == 0)); then
+	echo "$(basename $0): <opts> output_file"
+	exit 1
+fi
+
+FOUT=$1
+if [ -z "$obj_file_flag" ]; then
+	DIR_OUT=$(spark_dir $(basename $FOUT) )
+else
+	DIR_OUT=$FOUT
+fi
+echo DIR_OUT is $DIR_OUT
+
+ARGS="$obj_file_flag $spd_flag $cores_flag $fill_flag $rand_flag $matrix_flag $vector_flag $nrows_flag $ncols_flag $bsize_flag $diag_flag $DIR_OUT"
+
+. spark_vars
+
+if [ -z "$SLAVE_MEM" ]; then
+	SLAVE_MEM="$SPARK_MAX_MEM"
+fi
+
+JAR="$HOME/src/genmat/target/scala-2.10/genmat-assembly.jar"
+CLASSNAME="GenMat"
+CLASS="himrod.genmat.$CLASSNAME"
+LOG=$CLASSNAME-stderr
+
+spark-submit \
+	--deploy-mode $SPARK_DEPLOY_MODE \
+	--name $DIR_OUT \
+	--class $CLASS \
+	--master $SPARK_MASTER_URL \
+	--driver-memory $SPARK_DRIVER_MEM \
+	--executor-memory $SLAVE_MEM \
+	$JAR \
+	$ARGS \
+	2>$LOG 
+
+STATUS="$?"
+
+if [ "$STATUS" -ne 0 ]; then
+	echo FAILURE: spark-submit exited with status "$STATUS" 1>&2
+	echo Exiting catastrophically. 1>&2
+	grep -i "$CLASSNAME" $LOG 1>&2
+else
+	if [ -z "$obj_file_flag" ]; then
+		echo "Concatenating files..."
+		cat $(ls $DIR_OUT/part-* | sort) > $FOUT
+		rm -r -- "$DIR_OUT" 
+		# rm -r -- $DIR_OUT 2>/dev/null
+		# rm -r -- $DIR_OUT-* 2>/dev/null
+		# echo "Removing temporary directory..."
+		# rm -r -- "$DIR_OUT"-*
+		# rm -r -- "$DIR_OUT"
+	# else
+	# 	rm -ir -- $(echo $DIR_OUT | tr '/' '-')-*
+	fi
+fi
+
+echo "Removing temporary directory..."
+rm -r -- "$(echo $DIR_OUT | tr '/' '-')-"*
+rmdir -- "$(echo $DIR_OUT | tr '/' '-')-"*
+
+if [ -n "$verbose_flag" ]; then
+	grep -i "$CLASSNAME" $LOG 
+fi
+
+exit $STATUS

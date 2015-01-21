@@ -1,0 +1,26 @@
+#!/bin/bash
+
+. spark_vars
+
+it_pre="it-"
+output_dir=iters
+
+for m in $GANGLIA_METRICS; do
+	fin="$PWD/$GANGLIA_DATA_DIR/$m-per-it"
+	fout="$PWD/$GANGLIA_IMG_DIR/$m-per-it.eps"
+
+	echo $(basename $0): reading $fin
+	echo $(basename $0): generating $fout
+
+	# plot all nodes' data for single metric
+	gplotcols \
+		-s "$GANGLIA_PLOT_SIZE" \
+		-y "$m per iteration" \
+		-x "Iteration Time (s)" \
+		-L "$SPARK_SLAVE_NAMES" \
+		-P "bmargin horizontal" \
+		-f "Courier,Bold,20" \
+		-T "postscript eps" \
+		-o "$fout" \
+		$fin >/dev/null
+done

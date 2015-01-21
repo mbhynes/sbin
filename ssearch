@@ -1,0 +1,202 @@
+#!/bin/bash
+#============================================================
+# seach spark src code installation for documentation of functions
+# I got tired of using scaladoc---what a nightmare.
+#============================================================
+
+. spark_vars 
+
+this="$0"
+spark_dir="$SPARK_HOME"
+cd $spark_dir
+
+#============================================================
+# default variables; these are modified in getopts
+#============================================================
+subdir="core"
+file_ext=".scala"
+search_fname="true"
+case_i_match="-name"
+exclude='-a ! -path "*/target/*" -a ! -path "*/java/* '
+
+#============================================================
+error_log()
+{
+	msg="$@"
+	echo "Error: $(basename $this): $msg"
+}
+#============================================================
+get_reldirs()
+{
+	echo "$@" | sed -r -e "s|.*/spark/(.*)/src/main/scala/org/apache/spark/(.*)|\1/../\2|"
+}
+#============================================================
+prompt_with()
+{
+	# names=$(basename -a "$@")
+	# reldirs=$(get_reldirs "$@")
+	# lines=$(paste <(echo "$names") <(echo "$reldirs"))
+	# keys=$(sort <(echo "$@") )
+
+	select word in "$@"; do
+		echo $word
+		break
+	done
+}
+
+#============================================================
+edit_file()
+{
+	file=$1
+	if [ -r "$file" ]; then
+
+		if [ "$(basename $EDITOR)" != "vim" ]; then
+			$EDITOR "$file"
+		else
+			if [ -n "$search_func" ]; then
+				line="$(grep -n $grep_i_flag $grep_pattern $file | cut -f1 -d:)"
+				if [ -n "$line" ]; then
+					vim -R "+$line" $file
+				else
+					vim -R $file
+				fi
+			elif [ -n "$search_word" ]; then
+				vim -R "+/$string" $file
+			else
+				vim -R $file
+			fi
+		fi
+		return 0
+	else
+		return 1
+	fi
+}
+
+#============================================================
+display_and_edit()
+{
+	if [ -z "$files" ]; then
+		error_log "No $file_ext files found matching $pattern "
+		return 0
+	fi
+
+	num_files=$(echo "$files" | wc -w )
+	if [ -n "$search_word" ]; then
+		append=" with match '$string'"
+		msg="Found $num_files file(s) $append: "
+	elif [ -n "$search_func" ]; then
+		append=" with function '$string'"
+		msg="Found $num_files file(s) $append: "
+	else
+		msg="Found $num_files file(s) matching '$pattern': "
+	fi
+
+	echo $msg
+	file=$(prompt_with $files)
+
+	while [ -n "$file" ]; do
+		edit_file $file
+		if [ "$?" -gt 0 ]; then
+			error_log "could not read $file"
+		fi
+
+		clear 
+		echo $msg
+		file=$(prompt_with $files)
+
+	done
+
+	return 0
+}
+
+#============================================================
+opts="wet:iFd:"
+while getopts $opts opt
+do
+	case $opt in
+		e)
+			exact_match="true"
+			;;
+		i)
+			case_i_match="-iname"
+			grep_i_flag="-i"
+			;;
+		d)
+			subdir="$OPTARG"
+			if [ ! -d "$spark_dir/$subdir" ]; then
+				error_log "$spark_dir/$subdir" is not a valid search directory.
+				exit 1
+			fi
+			;;
+		w)
+			search_word="true"
+			;;
+		F)
+			search_func="true"
+			;;
+		t)
+			file_ext="$OPTARG"
+			if [ "${file_ext:0:1}" != "." ]; then
+				file_ext=".$file_ext"
+			fi
+			;;
+		:)
+			echo "-$opt requires argument"
+			exit 1
+			;;
+		\?) 
+			echo "invalid option -$opt" 1>&2
+			;;
+	esac
+done
+shift $((OPTIND-1))
+
+if [ "$#" -eq 0 ]; then
+	files=$(find ./$subdir $case_i_match "*$file_ext" $exclude )
+	display_and_edit
+	exit 0
+fi
+
+#============================================================
+while [ "$#" -gt 0 ]; do
+
+	string=$(basename "$1")
+	exten=$(ext $string)
+	if [ -n "$exten" ]; then
+		string=$(basename $string $ext)
+		file_ext="$exten"
+	fi
+
+	if [ -n "$exact_match" ]; then
+		pattern="$string$file_ext"
+	else
+		pattern="*$string*$file_ext"
+	fi
+
+	#============================================================
+	if [ -n "$search_word" ]; then
+		pool=$(find ./$subdir $case_i_match "*$file_ext" $exclude )
+		files=$(grep -ls $grep_i_flag "$string" $(echo "$pool" | tr ' ' '\n') )
+
+	elif [ -n "$search_func" ]; then
+
+		pool=$(find ./$subdir $case_i_match "*$file_ext" $exclude )
+
+		if [ -n "$exact_match" ]; then
+			grep_pattern="def[[:space:]+]\<$string\>"
+		else
+			grep_pattern="def[[:space:]+]\<[[:alpha:]]*$string[[:alpha:]]*\>"
+		fi
+		files=$(grep -ls -E $grep_i_flag "$grep_pattern" $(echo "$pool" | tr ' ' '\n') )
+
+	else
+		files=$(find ./$subdir $case_i_match "$pattern" $exclude )
+	fi
+
+	display_and_edit
+
+	shift
+done
+
+cd $OLDPWD
+exit 0

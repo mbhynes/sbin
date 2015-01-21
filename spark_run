@@ -1,0 +1,199 @@
+#!/bin/bash
+#======================================
+# Run a spark application on the cluster
+# Ensure that master/nodes have been started
+#======================================
+
+# this function only works if you clean out the log directory
+get_worker_logs()
+{
+	key=$(date +%Y%m%d)
+	src=$SPARK_WORKER_LOG_DIR
+	log=$(ls -1t $src | head -n 1)
+	if ! echo $log | grep -qm 1 "$key"; then
+		echo "WARNING: log directory $log has incorrect timestamp." 1>&2
+	fi
+	echo $SPARK_WORKER_LOG_DIR/$log
+}
+
+if (($#==0)); then
+	echo "usage: $(basename $0) [-d outputDir] [-M slaveMem] [-N AppName] [-v(erbose)] [-C Class] package.jar"
+	echo
+	echo Run package.jar on the cluster.
+	echo "Optionally specify slaveMem, Appname, and (main) Class"
+	echo
+	echo If no class is given, you will be prompted for one.
+	echo
+	echo Ensure that master/nodes have been started.
+	echo
+	exit 0
+fi
+
+get_time() {
+	date +%s
+}
+
+SLAVE_MEM_ARG=""
+
+# parse commandline arguments
+GETOPT_STRING="vj:C:M:N:d:L"
+while getopts $GETOPT_STRING opt
+do
+	case $opt in
+		M)
+			SLAVE_MEM="$OPTARG"
+			;;
+		N)
+			NAME="$OPTARG"
+			;;
+		d)
+			OUT_DIR="$OPTARG"
+			;;
+		C)
+			CLASS="$OPTARG"
+			;;
+		v)
+			VERBOSE="true"
+			;;
+		L)
+			GET_LOGS="true"
+			;;
+		:)
+			echo "-$opt requires argument"
+			exit 1
+			;;
+		\?) 
+			echo "invalid option -$opt" 1>&2
+			;;
+	esac
+done
+shift $((OPTIND-1))
+
+if (($# == 0)); then
+	echo "$(basename $0): <opts> package.jar"
+	echo "You must specify the jar to send to Spark."
+	exit 1
+fi
+
+JAR=$1
+
+# load all defaults in spark vars
+. spark_vars
+
+if [ -z "$JAR" ] || [ ! -f "$JAR" ]; then
+	echo "jar: $JAR" 
+	echo "could not be found or is not a regular file"
+	exit 1
+fi
+if [ -z "$OUT_DIR" ]; then
+	echo "You should specify the output directory for logs/ganglia info with [-d dir]"
+	exit 1
+fi
+
+if [ -z "$CLASS" ]; then
+	read -p "Enter classname >>> " CLASS
+fi
+
+if [ -z "$NAME" ]; then
+	NAME=$(echo $CLASS | tr 'A-Z' 'a-z')-$t_start
+fi
+
+if [ -z "$SLAVE_MEM" ]; then
+	SLAVE_MEM="$SPARK_MAX_MEM"
+fi
+
+t_start=$(get_time)
+
+if [ -z "$VERBOSE" ]; then
+	spark-submit \
+		--deploy-mode $SPARK_DEPLOY_MODE \
+		--name $NAME \
+		--class $CLASS \
+		--master $SPARK_MASTER_URL \
+		--driver-memory $SPARK_DRIVER_MEM \
+		--executor-memory $SLAVE_MEM \
+		$JAR \
+		$@  \
+		1> $SPARK_LOG_STDOUT \
+		2> $SPARK_LOG_STDERR
+else
+	# VERBOSE option: use tee to copy to stdout
+	spark-submit \
+		--deploy-mode $SPARK_DEPLOY_MODE \
+		--name $NAME \
+		--class $CLASS \
+		--master $SPARK_MASTER_URL \
+		--driver-memory $SPARK_DRIVER_MEM \
+		--executor-memory $SLAVE_MEM \
+		$JAR \
+		$@  \
+		1> >(tee $SPARK_LOG_STDOUT) \
+		2> >(tee $SPARK_LOG_STDERR)
+fi
+
+STATUS="$?"
+
+if [ "$STATUS" -ne 0 ]; then
+	echo
+	echo FAILURE: spark-submit exited with status "$STATUS" 1>&2
+	echo Exiting catastrophically. 1>&2
+	echo You may have to clean up "$SPARK_LOG_DIR/$NAME/" 1>&2
+	echo
+	JOB_FAILED="true"
+fi
+
+sleep $SPARK_RUN_DELAY
+t_end=$(get_time)
+
+# get the spark directory $NAME-120398429103, (CLASS-timestamp)
+spark_dir=$(ls -d $SPARK_LOG_DIR/$NAME-* 2>/dev/null)
+
+# rename to output directory
+if [ -n "$OUT_DIR" ]; then
+
+	if [ -d "$OUT_DIR" ] && [ -d "$spark_dir" ]; then
+		mv $spark_dir/* $OUT_DIR
+		rmdir $spark_dir
+	else
+		mv $spark_dir $OUT_DIR
+	fi
+
+	mv $SPARK_LOG_STDERR $OUT_DIR
+	mv $SPARK_LOG_STDOUT $OUT_DIR
+
+	cd $OUT_DIR
+fi
+
+# copy worker logs
+if [ -n "$GET_LOGS" ]; then
+
+	log_dir=$(get_worker_logs)
+
+	if [ -d "$log_dir" ]; then
+		echo "Copying $log_dir/ to $SPARK_WORKER_LOGS/" 1>&2
+		# rsync -az --exclude='*.jar' $log_dir $SPARK_WORKER_LOGS
+		cp -r $log_dir $SPARK_WORKER_LOGS
+	fi
+fi
+
+# save t_start and t_end to filter afterwards
+echo $t_start > $SPARK_LOG_TIME
+echo $t_end >> $SPARK_LOG_TIME
+
+# save exit status to file in current dir
+echo $STATUS > "$SPARK_EXIT_STATUS"_"$STATUS"
+
+# compile ganglia metrics
+if [ ! -d "$GANGLIA_DATA_DIR" ]; then
+	mkdir "$GANGLIA_DATA_DIR"
+fi
+
+cd "$GANGLIA_DATA_DIR"
+rrdcsv $GANGLIA_METRICS 1>$GANGLIA_NODE_ORDER 2>$GANGLIA_LOG_STDERR
+cd "$OLD_PWD"
+
+if [ -n "$JOB_FAILED" ]; then
+	exit 1
+else
+	exit 0
+fi

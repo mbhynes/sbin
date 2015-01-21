@@ -1,0 +1,127 @@
+#!/bin/bash
+#
+# Wed Nov 12 17:28:58 EST 2014
+#
+# extract all of the gmetad information into readable text
+# this will run several background sed processes
+#
+# Mike Hynes
+
+. spark_vars
+
+function dump()
+{
+
+	DATE="[[:digit:] -:EST]+"
+	BLANK="[[:space:]]*"
+	START="<!--"
+
+	FORMAT=".*\/ ([[:digit:]]+) --> <row><v>([[:digit:]\.e+-]+)<\/v><\/row>"
+
+	while (( $# > 0))
+	do
+		# rrdtool dump $1 | sed -e '1,38d' | sed -r -e "s/$FORMAT/\1 \2/" | sed -e "/[[:space:]]*<\/[[:alpha:]]*>/d"
+		rrdtool dump $1 | sed -r -e "1,38d; s/$FORMAT/\1$GANGLIA_DELIM\2/; /[[:space:]]*<\/[[:alpha:]]*>/d"
+		shift
+	done
+}
+
+function compile_metrics() 
+{
+	m=$1
+	shift
+ 	DIRS=$@
+
+	fout=$(basename $m .rrd)
+
+	FIRST=1
+	for d in $DIRS; do
+		if echo $d | grep -q $GANGLIA_EXCLUDE; then 
+			continue
+		fi
+
+		# echo Compiling $d 1>&2
+		if ((FIRST)); then
+			if [ -f $d/$m ]; then
+				FIRST=0
+				dump $d/$m > $fout
+			else 
+				echo ERROR: "$d/$m does not exist" 1>&2
+			fi
+
+		else
+
+			if [ -f $d/$m ]
+			then
+				tmpf=$(tempfile)
+				join $fout <(dump $d/$m) > $tmpf
+
+				if [ $? -eq 0 ]
+				then
+					mv $tmpf $fout
+				else
+					echo ERROR: Could not join $d/$m  1>&2
+					echo ERROR: See the output of \$rrdtool dump $d/$m: 1>&2
+					# dump $d/$m | head -n 10  
+					rm $tmpf
+				fi
+
+			else 
+				echo "ERROR: $d/$m does not exist" 1>&2
+			fi
+		fi
+	done
+}
+
+if (( $# == 0))
+then
+	echo "usage: $0 [metric1 metric2 ...]"
+	echo
+	echo "compile specified metrics, write them to files in the PWD"
+	echo
+	echo "to compile *all* metrics, run: "
+	echo "$0 all"
+	echo
+	echo "note: himrod files are storaged in:"
+	echo "/var/lib/ganglia/rrds/himrod/"
+	echo
+	echo "errors are reported to stderr"
+	exit
+fi
+
+# set all ganglia directories from to extract rrds
+DIRS="$GANGLIA_SRC/$SPARK_MASTER_NAME"
+for node in $SPARK_SLAVE_NAMES
+do
+	DIRS="$DIRS $GANGLIA_SRC/$node"
+done
+
+if [[ "$1" == "all" ]]
+then
+	METRICS=$(find $DIRS -name '*.rrd' -a ! -wholename "*$GANGLIA_EXCLUDE*" -printf '%f\n' 2>/dev/null | sort | uniq)
+else
+	METRICS=$@
+fi
+
+for d in $DIRS
+do
+	unit=$(basename $d) 
+
+	if [[ "$unit" == "$GANGLIA_EXCLUDE" ]]
+	then 
+		continue
+	fi
+
+	echo -n "$unit " 
+done
+
+for m in $METRICS
+do
+	echo "Compiling metric: $m" 1>&2
+	if [ "$(ext $m)" != ".rrd" ]
+	then
+		m="$m.rrd"
+	fi
+	compile_metrics $m $DIRS &
+done
+

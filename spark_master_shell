@@ -1,0 +1,24 @@
+#!/bin/bash
+
+MODE=client
+DRIVER_MEM=5G
+
+. spark_vars
+
+# unset the slaves variable for spark-shell
+# SPARK_SLAVES=""
+
+if [ "$#" -eq 0 ]; then
+	spark-shell \
+		--master $SPARK_MASTER_URL \
+		--deploy-mode $MODE \
+		--driver-memory $DRIVER_MEM \
+		--executor-memory $SPARK_MAX_MEM 
+else
+	spark-shell \
+		--master $SPARK_MASTER_URL \
+		--deploy-mode $MODE \
+		--driver-memory $DRIVER_MEM \
+		--executor-memory $SPARK_MAX_MEM \
+		--jars $@
+fi

@@ -1,0 +1,206 @@
+#!/bin/bash
+# generate plots comparing metrics in different runs 
+
+if (($# == 0))
+then
+	echo usage: $0 [dir1 dir2 ... dirN]
+	echo Generate ganglia data/plots for a set of runs in given dirs.
+	echo
+	echo Input directories must have been created/processed by spark_run.
+	echo
+	echo Metrics to process are defined by \$GANGLIA_METRICS in spark_vars 
+fi
+
+#==============================================
+# Main processing file; this is called below for each metric
+#==============================================
+process_metric()
+{
+	m=$1
+	hist_tmpfile=$(mktemp)
+
+	# strip away suffix
+	x=$(ext $m)
+	if [ "$x" == '.rrd' ]
+	then
+		m=$(basename $m $x)
+	fi
+
+	mfile_fil=$m.fil
+	mfile=$m.out
+	mfile_master=$m-mast.out
+	mfile_slaves="$m"-slaves.out
+	mfile_slaves_mean="$m"-slaves-mean.out
+	mfile_slaves_hist="$m"-slaves-hist.out
+
+	files=""
+	mean_files=""
+	hist_files=""
+	master_files=""
+
+
+	for DIR in $PROC_DIRS
+	do
+
+		if [ ! -d "$DIR/$GANGLIA_IMG_DIR" ]; then
+			mkdir -p "$DIR/$GANGLIA_IMG_DIR"
+		fi
+
+		d=$DIR/$GANGLIA_DATA_DIR
+
+		if [ ! -d "$d" ]; then
+			echo ERROR: "$d" is not a valid directory: skipping 1>&2
+			continue
+		fi
+
+		echo "Processing $d/$m..."
+
+		# extract times to file
+		if [ ! -f "$DIR/$SPARK_LOG_TIME" ]; then
+			echo "$(basename $0) Warning: $DIR/$SPARK_LOG_TIME is not a file." 1>&2
+		fi
+		rrd_filter_time -f $DIR/$SPARK_LOG_TIME $d/$m > $d/$mfile_fil	
+		
+		if [ "$?" -gt 0 ]; then
+			echo "$(basename $0): Warning: rrd_filter_time failed" 1>&2
+
+			echo "Filtered file contents:"
+			head -n 1 $d/$mfile_fil 1>&2
+			echo "..."
+			tail -n 1 $d/$mfile_fil 1>&2
+
+			echo "Checking: grep -Ehnso $d/$m:" 1>&2
+			t1=$(head -n 1 $DIR/$SPARK_LOG_TIME)
+			t2=$(tail -n 1 $DIR/$SPARK_LOG_TIME)
+			grep -Ehnso "^$t1 " $d/$m 1>&2
+			grep -Ehnso "^$t2 " $d/$m 1>&2
+
+			continue
+		fi
+
+		# remove the time offset so that t_0 = 0
+		rmoffset -c 1 -f "$fieldsep" $d/$mfile_fil > $d/$mfile
+
+		# make metric file containing time + master metrics
+		cut -d "$GANGLIA_DELIM" -f1,2 $d/$mfile > $d/$mfile_master
+
+		# make metric file containing time + slave metrics
+		cut -d "$GANGLIA_DELIM" --complement -f2 $d/$mfile > $d/$mfile_slaves
+
+		# compute mean/std of the slaves metrics
+		meanstd -s -1 -f "$fieldsep" \
+			-c "$colspan" \
+			$d/$mfile_slaves \
+			> $d/$mfile_slaves_mean
+
+		# generate histogram of average node
+		hist \
+			-N \
+			-c "$colspan" \
+			-b 50 \
+			-f "$fieldsep" \
+		 	$d/$mfile_slaves \
+			> $hist_tmpfile
+
+		meanstd \
+			-s \
+			-1 \
+			-f "$fieldsep" \
+			-c "$colspan" \
+			$hist_tmpfile \
+			> $d/$mfile_slaves_hist
+
+		# plot all nodes' data for single metric
+		gplotcols \
+			-s "$GANGLIA_PLOT_SIZE" \
+			-y "$m" \
+			-x "Runtime (s)" \
+			-L "$SPARK_SLAVE_NAMES" \
+			-P "bmargin horizontal" \
+			-f "Courier,Bold,20" \
+			-T "postscript eps" \
+			-o $DIR/$GANGLIA_IMG_DIR/$m.eps \
+			$d/$mfile_slaves >/dev/null
+
+		files="$files $d/$mfile"
+		hist_files="$hist_files $d/$mfile_slaves_hist"
+		mean_files="$mean_files $d/$mfile_slaves_mean"
+		master_files="$master_files $d/$mfile_master"
+
+	done
+
+	echo "Processing $m graphs for all runs..."
+
+	if [ ! -d "$GANGLIA_IMG_DIR" ]; then
+		mkdir -p "$GANGLIA_IMG_DIR"
+	fi
+
+	# plot master metrics from each input directory
+	gplot \
+		-s "$GANGLIA_PLOT_SIZE" \
+		-y "mean $m (Master)" \
+		-x "Runtime (s)" \
+	 	-L "$legend" \
+		-P "bmargin horizontal" \
+		-f "Courier,Bold,20" \
+		-T "postscript eps" \
+		-o $GANGLIA_IMG_DIR/$m-master.eps \
+		$master_files >/dev/null
+
+	# plot mean metrics from each input directory
+	gplot \
+		-s "$GANGLIA_PLOT_SIZE" \
+		-y "mean $m" \
+		-x "Runtime (s)" \
+	 	-L "$legend" \
+		-P "bmargin horizontal" \
+		-f "Courier,Bold,20" \
+		-T "postscript eps" \
+		-o $GANGLIA_IMG_DIR/$m-mean.eps \
+		$mean_files >/dev/null
+
+	# plot histogram of metrics from each input directory
+	gplot \
+		-s "$GANGLIA_PLOT_SIZE" \
+		-y "Distribution" \
+		-x "$m" \
+	 	-L "$legend" \
+		-P "bmargin horizontal" \
+		-f "Courier,Bold,20" \
+		-T "postscript eps" \
+		-o $GANGLIA_IMG_DIR/$m-hist.eps \
+		$hist_files >/dev/null
+		# $hist_files 
+
+	rm $hist_tmpfile
+}
+
+#==============================================
+. spark_vars
+
+PROC_DIRS="$@"
+fieldsep="'%4.4e$GANGLIA_DELIM'"
+colspan="[2:$SPARK_NUM_SLAVES]"
+
+# compare each metric
+if [ "$GANGLIA_METRICS" == "all" ]
+then
+
+	DIRS="$GANGLIA_SRC/$SPARK_MASTER"
+	for node in $SPARK_SLAVE_NAMES
+	do
+		DIRS="$DIRS $GANGLIA_SRC/$node"
+	done
+	GANGLIA_METRICS=$(find $DIRS -name '*.rrd' \
+		-a ! -wholename "*$GANGLIA_EXCLUDE*" \
+		-printf '%f\n' 2>/dev/null | sort | uniq)
+fi
+
+legend=$(basename -a "$@" | tr '\n' ' ')
+
+for m in $GANGLIA_METRICS; do
+	echo "Processing $m..."
+	(process_metric $m) 
+done
+
+exit 0

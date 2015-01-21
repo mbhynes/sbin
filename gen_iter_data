@@ -1,0 +1,22 @@
+#!/bin/bash
+
+. spark_vars
+
+it_pre="it-"
+output_dir=iters
+
+for arg in "$@"; do
+	dir=$(dirname $arg)
+	spark_read_iters -g $dir/$GANGLIA_DATA_DIR -p "$it_pre" -d $dir/$output_dir $arg
+
+	for metric in $GANGLIA_METRICS; do
+		fout="$dir/$GANGLIA_DATA_DIR/$metric-per-it"
+
+		tmpfile=$(mktemp)
+		echo $(basename $0): writing $fout
+		filesum -m -f '"%f "' $dir/$output_dir/$it_pre*/$metric* > $tmpfile
+		rmoffset -c 1 $tmpfile  > $fout
+		rm $tmpfile
+
+	done
+done

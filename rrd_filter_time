@@ -1,0 +1,107 @@
+#!/bin/bash
+# rrd_filter_time t0 t1 file file file ..
+# output values from rrdcsv files only within [t0,t1]
+
+
+get_line_num() 
+{
+	t0=$1
+	file=$2
+	line=$(grep -Ehnso "^$t0" $file)
+	echo $line | sed -r -e 's/([[:digit:]]+):[[:digit:]]*/\1/'
+}
+
+cat_sub() # $n1 $n2 $file
+{
+	n1=$1
+	n2=$2
+	file=$3
+	N=$(wc -l <$file)
+
+	tail -n $((N - n1 + 1)) $file | head -n $((n2 - n1 + 1))
+}
+
+if (($# == 0))
+then
+	echo usage: "$0 -1 t1 -2 t2 file file file .."
+	exit
+fi
+
+while getopts "1:2:f:" opt
+do
+	case $opt in
+		f)
+			file="$OPTARG"
+			t1=$(head -n 1 $file)
+			t2=$(tail -n 1 $file)
+			echo "$(basename $0): using t1=$t1; t2=$t2" 1>&2
+			;;
+		1)
+			t1="$OPTARG"
+			;;
+		2) 
+			t2="$OPTARG"
+			;;
+		?)
+			echo "invalid option -$opt" 1>&2
+			;;
+		:)
+			echo "-$opt requires argument"
+			exit 1
+			;;
+	esac
+done
+
+shift $((OPTIND-1))
+
+NUM_ERRS=0
+
+while (($# > 0))
+do
+	file=$1
+	# if t1/t2 are unspecified, use the beginning or end of tile
+	if [ -n "$t1" ] 
+	then
+		n1=$(get_line_num $t1 $file)
+	else
+		echo "$(basename $0) Warning: error in t1: using n1=1" 1>&2
+		n1=1
+		# ((NUM_ERRS++))
+	fi
+
+	if [ -n "$t2" ]
+	then
+		n2=$(get_line_num $t2 $file)
+	else
+		echo "$(basename $0) Warning: error in t2: using n2=EOF" 1>&2
+		n2=$(wc -l <$file)
+		# ((NUM_ERRS++))
+	fi
+
+	if [ -z "$n1" ]; then
+		n1=1
+		echo "error in line number 1:" 1>&2
+		echo "n1: $n1" 1>&2
+		((NUM_ERRS++))
+	fi	
+
+	if [ -z "$n2" ]; then
+		n2=$(wc -l <$file)
+		echo "error in line number 2:" 1>&2
+		echo "n2: $n2" 1>&2
+		((NUM_ERRS++))
+	fi	
+
+	# check that numbers are monotonically increasing
+	if ((n1 > n2))
+	then
+		cat_sub $n2 $n1 $file
+	else
+		cat_sub $n1 $n2 $file
+	fi
+	
+	shift
+
+done
+
+exit $NUM_ERRS

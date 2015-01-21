@@ -1,0 +1,80 @@
+#===================================
+#!/usr/bin/bash
+#===================================
+# Set spark defaults and env variables
+# 
+# This script is loaded by spark-related
+# scripts, and contains all global defs
+#
+# It's been pruned such that the variables
+# do not conflict with existing ones used 
+# by spark shell scripts.
+#===================================
+
+export SPARK_LOCAL_DIRS=$HOME/stmp 	
+
+# defaults for spark master 
+export SPARK_MASTER_NAME=himrod
+export SPARK_MASTER_IP=$(grep " $SPARK_MASTER_NAME$" /etc/hosts | cut -d ' ' -f1) 
+
+# config/web stuff
+export SPARK_MASTER_PORT=7078
+export SPARK_MASTER_WEBUI_PORT=9090
+export SPARK_MASTER_URL="spark://$SPARK_MASTER_IP:$SPARK_MASTER_PORT"
+export APACHE="org.apache.spark"
+
+# home/config directories
+export SPARK_HOME=~/spark/
+export SPARK_CONFIG_DIR=~/.spark
+export SPARK_SLAVE_NAMES=$(cat $SPARK_CONFIG_DIR/slaves | tr '\n' ' ')
+export SPARK_NUM_SLAVES=$(wc -l < $SPARK_CONFIG_DIR/slaves)
+export SPARK_NUM_CORES=32
+
+# delay between subsequent runs, in seconds
+export SPARK_RUN_DELAY=5 
+
+# node parameters
+export SPARK_DRIVER_MEM="10G"
+export SPARK_MAX_MEM="180G"
+export SPARK_DEPLOY_MODE="client"
+
+# event logging directories logging
+export SPARK_LOG_DIR=$(grep -E '^spark.eventLog.dir' $SPARK_CONFIG_DIR/spark-defaults.conf | \
+	sed -r -e 's/.*[[:space:]]+(.*)/\1/')
+export SPARK_LOG_STDOUT=spark_stdout
+export SPARK_LOG_STDERR=spark_stderr
+export SPARK_LOG_TIME=spark_time
+export SPARK_WORKER_LOG_DIR=$SPARK_HOME/work
+export SPARK_WORKER_LOGS=worker_logs
+export SPARK_EXIT_STATUS=spark_exit_status
+
+# ganglia metric configuration 
+export GANGLIA_SRC=/var/lib/ganglia/rrds/himrod
+
+# output file listing ganglia node ordering
+export GANGLIA_NODE_ORDER=ganglia_node_order
+export GANGLIA_LOG_STDERR=ganglia_stderr
+
+# ganglia directory to exclude
+export GANGLIA_EXCLUDE='__SummaryInfo__'
+
+# ganglia field delimiter for rrdcsv
+export GANGLIA_DELIM=' '
+
+
+# which ganglia metrics to use; "all" will expand to all metrics
+# export GANGLIA_METRICS="all"
+export GANGLIA_METRICS="cpu_idle cpu_user cpu_system cpu_wio bytes_in bytes_out load_one pkts_in pkts_out proc_run proc_total"
+
+
+# gnuplot plotting
+export GNUPLOT_CONF=~/.gnuplot/ganglia.plt
+export GNUPLOT_MEAN_CONF=~/.gnuplot/mean_std.plt
+export GANGLIA_PLOT_SIZE='5,4'
+export GANGLIA_IMG_DIR=img
+export GANGLIA_DATA_DIR=ganglia
+
+
+# set java verbose garbage collection (gc)
+# export SPARK_JAVA_OPTS="$SPARK_JAVA_OPTS -verbose:gc -XX:+PrintGCDetails -XX:+PrintGCDateStamps"
+# export SPARK_JAVA_OPTS="$SPARK_JAVA_OPTS -verbose:gc -XX:+PrintGCDetails -XX:+PrintGCTimeStamps -XX:+PrintGCDateStamps"

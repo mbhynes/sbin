@@ -1,0 +1,5 @@
+#/bin/bash
+
+. spark_vars 
+site="http://$SPARK_MASTER_IP:$SPARK_MASTER_WEBUI_PORT"
+links $site
