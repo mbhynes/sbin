@@ -1,0 +1,3 @@
+*.swp
+sbt
+sbt-launch.jar
