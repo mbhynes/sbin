@@ -1,8 +1,7 @@
 #!/bin/bash
 # generate plots comparing metrics in different runs 
 
-if (($# == 0))
-then
+if (($# == 0)); then
 	echo usage: $0 [dir1 dir2 ... dirN]
 	echo Generate ganglia data/plots for a set of runs in given dirs.
 	echo
@@ -21,8 +20,7 @@ process_metric()
 
 	# strip away suffix
 	x=$(ext $m)
-	if [ "$x" == '.rrd' ]
-	then
+	if [ "$x" == '.rrd' ]; then
 		m=$(basename $m $x)
 	fi
 
@@ -183,8 +181,7 @@ fieldsep="'%4.4e$GANGLIA_DELIM'"
 colspan="[2:$SPARK_NUM_SLAVES]"
 
 # compare each metric
-if [ "$GANGLIA_METRICS" == "all" ]
-then
+if [ "$GANGLIA_METRICS" == "all" ]; then
 
 	DIRS="$GANGLIA_SRC/$SPARK_MASTER"
 	for node in $SPARK_SLAVE_NAMES
