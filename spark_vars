@@ -41,13 +41,16 @@ export SPARK_DEPLOY_MODE="client"
 # event logging directories logging
 export SPARK_LOG_DIR=$(grep -E '^spark.eventLog.dir' $SPARK_CONFIG_DIR/spark-defaults.conf | \
 	sed -r -e 's/.*[[:space:]]+(.*)/\1/')
-export SPARK_LOG_STDOUT=spark_stdout
-export SPARK_LOG_STDERR=spark_stderr
-export SPARK_LOG_TIME=spark_time
 export SPARK_WORKER_LOG_DIR=$HOME/logs
-export SPARK_WORKER_LOGS=worker_logs
 export SPARK_WORKER_DIR=$HOME/swork
-export SPARK_EXIT_STATUS=spark_exit_status
+
+# variables for spark_run 
+# the following directories/files will be created by spark_run
+export SPARK_LOG_TIME=spark_time # store the start/stop time
+export SPARK_LOG_STDOUT=spark_stdout #stdout from driver
+export SPARK_LOG_STDERR=spark_stderr #stderr from driver
+export SPARK_WORKER_LOGS=worker_logs # copy logs to ./$SPARK_WORKER_LOGS
+export SPARK_EXIT_STATUS=spark_exit_status # exit status of driver
 
 # ganglia metric configuration 
 export GANGLIA_SRC=/var/lib/ganglia/rrds/himrod
@@ -64,9 +67,7 @@ export GANGLIA_DELIM=' '
 
 
 # which ganglia metrics to use; "all" will expand to all metrics
-# export GANGLIA_METRICS="all"
 export GANGLIA_METRICS="cpu_idle cpu_user cpu_system cpu_wio bytes_in bytes_out load_one pkts_in pkts_out proc_run proc_total"
-
 
 # gnuplot plotting
 export GNUPLOT_CONF=~/.gnuplot/ganglia.plt

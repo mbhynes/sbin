@@ -17,15 +17,18 @@ get_worker_logs()
 }
 
 if (($#==0)); then
-	echo "usage: $(basename $0) [-d outputDir] [-M slaveMem] [-N AppName] [-v(erbose)] [-C Class] package.jar"
-	echo
-	echo Run package.jar on the cluster.
-	echo "Optionally specify slaveMem, Appname, and (main) Class"
-	echo
-	echo If no class is given, you will be prompted for one.
-	echo
-	echo Ensure that master/nodes have been started.
-	echo
+	cat <<-EOF
+
+	usage: $(basename $0) [-d outputDir] [-M slaveMem] [-N AppName] [-v(erbose)] [-C Class] package.jar"
+
+	Run package.jar on the cluster.
+	Optionally specify slaveMem, Appname, and (main) Class
+
+	If no class is given, you will be prompted for one.
+
+	Ensure that master/nodes have been started.
+
+EOF
 	exit 0
 fi
 
@@ -114,10 +117,10 @@ if [ -z "$VERBOSE" ]; then
 		--executor-memory $SLAVE_MEM \
 		$JAR \
 		$@  \
-		1> $SPARK_LOG_STDOUT \
+		1> >(tee $SPARK_LOG_STDOUT) \
 		2> $SPARK_LOG_STDERR
 else
-	# VERBOSE option: use tee to copy to stdout
+	# VERBOSE option: use tee to copy stderr to stdout
 	spark-submit \
 		--deploy-mode $SPARK_DEPLOY_MODE \
 		--name $NAME \
@@ -134,11 +137,13 @@ fi
 STATUS="$?"
 
 if [ "$STATUS" -ne 0 ]; then
-	echo
-	echo FAILURE: spark-submit exited with status "$STATUS" 1>&2
-	echo Exiting catastrophically. 1>&2
-	echo You may have to clean up "$SPARK_LOG_DIR/$NAME/" 1>&2
-	echo
+	cat <<-EOF
+
+	FAILURE: spark-submit exited with status "$STATUS" 1>&2
+	Exiting catastrophically. 1>&2
+	You may have to clean up "$SPARK_LOG_DIR/$NAME/" 1>&2
+
+EOF
 	JOB_FAILED="true"
 fi
 
@@ -192,8 +197,4 @@ cd "$GANGLIA_DATA_DIR"
 rrdcsv $GANGLIA_METRICS 1>$GANGLIA_NODE_ORDER 2>$GANGLIA_LOG_STDERR
 cd "$OLD_PWD"
 
-if [ -n "$JOB_FAILED" ]; then
-	exit 1
-else
-	exit 0
-fi
+exit $STATUS

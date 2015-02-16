@@ -1,0 +1,115 @@
+#!/bin/bash
+#
+# filter_metrics
+#
+# usage: 
+#	filter_metrics 
+#		-1 startTime 
+#		-2 endTime 
+# 	[-m "metric1 metric2 ..."] [-d outputdir] [-s suffix] 
+# 	[dir1 dir2 ...]
+#
+# Print the ganglia metrics of all metrics in [dir1 dir2 ..] 
+# that fall in the range startTime <= t <= endTime.
+#
+# This script runs
+#		rrd_filter_time -1 $t1 -2 $t2 $dir/$metric > $fout
+# for each metric found in the input directory.
+# 
+# The filtered files are saved to $outputdir/$metric$suffix, 
+# where, by default:
+# 	outputdir=inputdir
+# 	suffix=".fil"
+#
+# =================================================
+# Author: Michael B Hynes, mbhynes@uwaterloo.ca
+# License: GPL 3
+# Creation Date: Mon 16 Feb 2015 12:33:16 AM EST
+# Last Modified: Mon 16 Feb 2015 12:46:03 AM EST
+# =================================================
+
+. spark_vars
+
+SCRIPT_NAME=$(basename $0)
+msg () {
+	echo "$SCRIPT_NAME: $@" 1>&2
+}
+warn () {
+	msg WARNING: $@
+}
+error () {
+	msg ERROR: $@
+}
+
+optstring="1:2:m:s:d:"
+while getopts $optstring opt; do
+	case $opt in
+		d)
+			outputdir="$OPTARG"
+			;;
+		s)
+			output_file_suffix="$OPTARG"
+			;;
+		m)
+			metrics="$OPTARG"
+			;;
+		1)
+			t1="$OPTARG"
+			;;
+		2) 
+			t2="$OPTARG"
+			;;
+		?)
+			error "invalid option -$opt" 
+			;;
+		:)
+			error "-$opt requires argument"
+			exit 1
+			;;
+	esac
+done
+
+shift $((OPTIND-1))
+
+if (($# == 0)); then
+	disp_opts -h -n 30 $0 
+	exit 1
+fi
+
+if [ -z "$metrics" ]; then
+	metrics="$GANGLIA_METRICS"
+fi
+
+if [ -z "$output_file_suffix" ]; then
+	output_file_suffix="-fil"
+fi
+
+
+# loop over all given directories
+for d in "$@"; do
+	if [ -d "$d" ]; then
+
+		if [ -z "$t1" ] || [ -z "$t2" ]; then
+			error "specified times are invalid:"
+			error "-1 $t1 -2 $t2" 
+			continue
+		fi
+
+		# set default output directory to input dir
+		if [ -z "$outputdir" ]; then
+			outputdir="$d"
+		fi
+
+		for m in $metrics; do
+			if [ -r "$d/$m" ]; then
+				fout="$outputdir/$m$output_file_suffix"
+				rrd_filter_time -1 $t1 -2 $t2 $d/$m > $fout
+			else
+				error "$d/$m is not readable" 
+			fi
+		done
+
+	else
+		error "$d is not a valid directory" 
+	fi
+done

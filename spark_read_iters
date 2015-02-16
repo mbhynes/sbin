@@ -1,7 +1,51 @@
 #!/bin/bash
-# read the iteration times from a spark_stdout file, and compile the metrics
+# 
+# spark_read_iters
+#
+# Read the timestamps in a file with format:
+# timestamp<field_sep>dat<field_sep>dat ...
+# 
+# For example,
+# 013449549:23.97:sunny:hot
+# 013449579:25.97:windy:hotter
+#
+# Using a specified extended regular expression, read the
+# timestamps of the lines with matches and treat them as
+# the boundaries of an iteration in the stdout of an iterative
+# program.
+#
+# These timestamps are then used by 
+# filter_metrics
+# to generate the ganglia metrics for each iteration, and store
+# these to:
+#		$outputdir/$iter_dir_prefix$N
+# where N is the iteration number, starting from 0.
+#
+# A delay may be specified, shifting t1 and t2 as:
+# t1' = t1 - delay
+# t2' = t2 + delay
+# This is just to see things a bit better if clipping happens;
+# head or tail can be run on the resuling data for truncation.
+#
+# =================================================
+# Author: Michael B Hynes, mbhynes@uwaterloo.ca
+# License: GPL 3
+# Creation Date: Mon 16 Feb 2015 12:27:51 AM EST
+# Last Modified: Mon 16 Feb 2015 12:59:42 AM EST
+# =================================================
 
 . spark_vars
+
+SCRIPT_NAME=$(basename $0)
+msg () {
+	echo "$SCRIPT_NAME: $@" 1>&2
+}
+warn () {
+	msg WARNING: $@
+}
+error () {
+	msg ERROR: $@
+}
 
 get_num_matches () {
 	grep -E "$regexp" "$1" | wc -l
@@ -10,21 +54,21 @@ get_num_matches () {
 get_times() {
 	n=$(get_num_matches $1)
 	if [ "$n" -gt 0 ]; then
-		grep -E "$regexp" "$1" | cut -d ":" -f1
+		grep -E "$regexp" "$1" | cut -d "$field_sep" -f1
 	else
 		echo
 	fi
 }
 
-# process a file; for each match of regexp, print the iteration metrics
-process_file ()
+# for each match of the given regexp, print the iteration metrics
+print_metrics_per_iteration()
 {
 	# create an array of times
 	read -a <<< $(get_times $file) times
 
 	num_matches=${#times[@]}
 	if [ "$num_matches" -eq 0 ]; then
-		echo "$(basename $0): Warning: no matches found for $regexp in $file"
+		error "No matches found for $regexp in $file"
 		return 1
 	fi
 
@@ -43,28 +87,30 @@ process_file ()
 		s_flag="-s $suffix"
 		m_flag="-m '$metrics' "
 
-		echo metperit $pair $d_flag $m_flag $s_flag $iter_dir 1>&2
+		msg "Running filter_metrics $pair $d_flag $m_flag $s_flag $iter_dir 1>&2"
 
-		metperit \
+		filter_metrics \
 			$pair \
 			$d_flag \
 			$s_flag \
-			"$ganglia_src_dir"
+			"$ganglia_metrics_dir"
 
 	done
 
 	return 0
 }
 
-optstring="0:m:s:d:g:r:p:"
-while getopts $optstring opt
-do
+optstring="0:m:s:d:g:r:f:p:"
+while getopts $optstring opt; do
 	case $opt in
 		0)
 			delay="$OPTARG"
 			;;
 		r)
 			regexp="$OPTARG"
+			;;
+		f)
+			field_sep="$OPTARG"
 			;;
 		d)
 			outputdir="$OPTARG"
@@ -73,7 +119,7 @@ do
 			iter_dir_prefix="$OPTARG"
 			;;
 		g)
-			ganglia_src_dir="$OPTARG"
+			ganglia_metrics_dir="$OPTARG"
 			;;
 		s)
 			suffix="$OPTARG"
@@ -93,9 +139,8 @@ done
 
 shift $((OPTIND-1))
 
-if [ -z "$@" ]; then
-	echo "$(basename $0): no input files specified"
-	echo "$(basename $0): usage: call on spark_stdout" 
+if (($# == 0 )); then
+	disp_opts -h -n 40 $0 2>/dev/null
 	exit 1
 fi
 
@@ -109,15 +154,26 @@ fi
 
 if [ -z "$suffix" ]; then
 	suffix="-fil"
+	msg "no -s suffix specified; using $suffix"
 fi
 
-if [ -z "$ganglia_src_dir" ]; then
-	ganglia_src_dir="$PWD/$GANGLIA_DATA_DIR"
-	echo "$(basename $0): Warning: ganglia src dir unspecified; using $ganglia_src_dir" 1>&2
+if [ -z "$field_sep" ]; then
+	field_sep=':'
+	msg "no -f field_sep specified; using $field_sep"
+fi
+
+if [ -z "$ganglia_metrics_dir" ]; then
+	ganglia_metrics_dir="$PWD/$GANGLIA_DATA_DIR"
+	if [ ! -d "$ganglia_metrics_dir" ]; then
+		error "-g <dir> unspecified and $ganglia_metrics_dir is not a valid dir"
+		exit 1
+	fi
+	msg "ganglia src dir unspecified; using $ganglia_metrics_dir"
 fi
 
 if [ -z "$metrics" ]; then
 	metrics="$GANGLIA_METRICS"
+	msg "no -s suffix specified; using $GANGLIA_METRICS"
 fi
 
 if [ -z "$outputdir" ]; then
@@ -130,7 +186,7 @@ if [ -z "$regexp" ]; then
 	sep1=': '
 	sep2=','
 	regexp="$int$sep1$int$sep2$float"
-	echo "$(basename $0): Warning: regexp unspecified; using $regexp" 1>&2
+	warn "regexp unspecified; using $regexp"
 fi
 
 for file in "$@"; do
@@ -138,5 +194,5 @@ for file in "$@"; do
 		echo "$(basename $0): Warning: $file is not readable" 1>&2
 		continue
 	fi
-	process_file 
+	print_metrics_per_iteration 
 done
