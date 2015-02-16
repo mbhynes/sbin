@@ -1,0 +1,108 @@
+#!/bin/bash
+#
+# scalatex
+#
+# Print LaTeX listings for a given scala source file.
+#
+# =================================================
+# Author: Michael B Hynes, mbhynes@uwaterloo.ca
+# License: GPL 3
+# Creation Date: Mon 09 Feb 2015 05:25:57 PM EST
+# Last Modified: Mon 09 Feb 2015 06:31:28 PM EST
+# =================================================
+
+separate_classes=""
+separate_methods=""
+LANG=java
+SCRIPT_NAME=$(basename $0)
+msg () {
+	echo "$SCRIPT_NAME: $@" 1>&2
+}
+warn () {
+	msg WARNING: $@
+}
+error () {
+	msg ERROR: $@
+}
+
+start_listing() {
+	echo "\\\\begin{lstlisting}[language=$LANG]"
+}
+end_listing(){
+	echo '\\end{lstlisting}'
+}
+get_match_line() {
+	grep -E -n -m 1 -- "$1" -  \
+		| cut -d ":" -f 1
+}
+
+print_classes() {
+	class_match='^(case )?class .*'
+	# class_match='^(case )?class .*'
+	print_sections "$1" "$class_match"
+}
+
+print_objects() {
+	obj_match='^object .*'
+	print_sections "$1" "$obj_match"
+}
+
+print_methods() {
+	method_match='[\t ]{2}(override )?def .*'
+}
+
+print_sections() {
+	file="$1"
+	match="$2"
+	end_match='^}[[:space:]]*$'
+
+	msg "Looking for first match in $file"
+	n1=$(get_match_line "$match" < "$file" ) 
+	n2="non_empty"
+
+	while [ -n "$n1" ] && [ -n "$n2" ]; do
+		delta=$(catsub -1 $n1 "$file" \
+			| get_match_line "$end_match" 2>/dev/null \
+		)
+		n2=$((n1 + delta))
+		start_listing
+		msg "extracting n1=$n1 and n2=$n2 from $file"
+		catsub -1 $n1 -2 $n2 "$file"
+		end_listing
+
+		n1=$(catsub -1 "$n2" "$file" 2>/dev/null \
+			| get_match_line "$match" \
+		) 
+	done
+
+}
+optstring=""
+while getopts "$optstring" opt; do
+	case "$opt" in
+		:)
+			error "-$opt requires argument" 
+			;; 
+		?)
+			error $(basename $0)"invalid option"
+			;; 
+	esac
+done
+shift $((OPTIND - 1))
+
+# if [ -z "$separate_classes" ]; then
+# else
+# fi
+# 
+# if [ -z "$separate_methods" ]; then
+# else
+# fi
+
+# separate_classes
+# separate_methods
+
+for fin in "$@"; do
+	if [ -r "$fin" ]; then
+		print_classes "$fin"
+		print_objects "$fin"
+	fi
+done

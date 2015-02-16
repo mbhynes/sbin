@@ -44,8 +44,9 @@ export SPARK_LOG_DIR=$(grep -E '^spark.eventLog.dir' $SPARK_CONFIG_DIR/spark-def
 export SPARK_LOG_STDOUT=spark_stdout
 export SPARK_LOG_STDERR=spark_stderr
 export SPARK_LOG_TIME=spark_time
-export SPARK_WORKER_LOG_DIR=$SPARK_HOME/work
+export SPARK_WORKER_LOG_DIR=$HOME/logs
 export SPARK_WORKER_LOGS=worker_logs
+export SPARK_WORKER_DIR=$HOME/swork
 export SPARK_EXIT_STATUS=spark_exit_status
 
 # ganglia metric configuration 

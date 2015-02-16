@@ -1,0 +1,63 @@
+#!/bin/bash
+#
+# spark_link_conf [-d sparkConfDir] [dir]
+# 
+# Make symlinks in the ~/spark/conf to the
+# configuration files specified in dir.
+#
+# =================================================
+# Author: Michael B Hynes, mbhynes@uwaterloo.ca
+# License: GPL 3
+# Creation Date: Sun 15 Feb 2015 03:11:16 PM EST
+# Last Modified: Sun 15 Feb 2015 03:30:01 PM EST
+# =================================================
+
+srcdir=""
+
+SCRIPT_NAME=$(basename $0)
+msg () {
+	echo "$SCRIPT_NAME: $@" 1>&2
+}
+warn () {
+	msg WARNING: $@
+}
+error () {
+	msg ERROR: $@
+}
+
+optstring="d:"
+while getopts "$optstring" opt; do
+	case "$opt" in
+		d)
+			srcdir="$OPTARG"
+			;;
+		:)
+			error "-$opt requires argument" 
+			;; 
+		?)
+			error invalid option
+			;; 
+	esac
+done
+shift $((OPTIND - 1))
+
+if [ -z "$srcdir" ] || [ ! -d "$srcdir" ]; then
+	error "Not a valid directory or src unspecfied: -d \"$srcdir\""
+	exit 1
+fi
+
+for d in "$@"; do
+	if [ ! -d "$d" ]; then
+		error "Not a valid directory: \"$d\""
+		continue
+	fi
+
+	msg "Linking all configuration files in $srcdir to $d"
+	for f in $(ls $srcdir); do
+		if [ -r "$srcdir/$f" ]; then
+			msg "$f ..."
+			ln -rs "$srcdir/$f" "$d/" 2>/dev/null
+		fi
+	done
+
+done
