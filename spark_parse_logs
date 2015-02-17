@@ -1,0 +1,216 @@
+#!/bin/bash
+#
+# spark_parse_logs [-C class] [-M] [-d delim] [-t timeformat] [-m logtype] [log1 log2 ...]
+#
+# Print the job information from the Spark stderr logs in format similar to
+# the following for -C DAGScheduler:
+# time_elapsed,job#,action,file,line#,duration
+#
+# Example: (for -C DAGScheduler)
+# 	3477,157,reduce,ALS.scala,644,204.523488
+# 	3869,158,count,ALS.scala,812,392.043044
+# 	4252,159,count,ALS.scala,816,382.812292
+# 	4479,160,count,ALS.scala,762,227.618045
+#
+# time_elapsed can be either in seconds or milliseconds, depending on 
+# the format specified in $SPARK_HOME/conf/log4j.properties.
+#
+# To print all info to stderr with the timstamp as ms elapsed since 
+# program initiation, use the following log4j settings (note the %r):
+# 	log4j.rootCategory=INFO, console
+# 	log4j.appender.console=org.apache.log4j.ConsoleAppender
+# 	log4j.appender.console.target=System.err
+# 	log4j.appender.console.layout=org.apache.log4j.PatternLayout
+# 	log4j.appender.console.layout.ConversionPattern=%r&%p&%c{1}&%m&%n
+#
+# This script requires timestamp formats if the -M flag in combination with
+# log4j %r is not used; these must follow the unix date formats. 
+#
+# Note that the default Spark log4j settings uses +'%y/%M/%S', and not
+# +'%y/%M/%S'; the former cannot be parsed into a proper time by date because
+# it is ambiguous.
+#
+# =================================================
+# Author: Michael B Hynes, mbhynes@uwaterloo.ca
+# License: GPL 3
+# Creation Date: Mon 16 Feb 2015 03:25:20 PM EST
+# Last Modified: Mon 16 Feb 2015 11:49:31 PM EST
+# =================================================
+
+FLOAT='[[:digit:]]+\.[[:digit:]]+'
+INT='[[:digit:]]+'
+ALNUM='[[:alnum:]]+'
+HOST='[[:alnum:]-]+'
+log_type=INFO
+
+SCRIPT_NAME=$(basename $0)
+msg () {
+	echo "$SCRIPT_NAME: $@" 1>&2
+}
+warn () {
+	msg WARNING: $@
+}
+error () {
+	msg ERROR: $@
+}
+
+get_start_time ()  
+{
+	file="$1"
+	regex=$(dateregex "$timeformat")
+	# get first match and convert it to epoch seconds
+	grep -Eo -m 1 "^$regex" "$file" \
+		| date +'%s' -f -
+	return $?
+}
+
+get_elapsed_time ()
+{
+	date -f - +'%s' \
+		| rmoffset -f '"%g,"' -a "$t0" -
+}
+
+parse_task()
+{
+	cat <<EOF
+s/.INFO.TaskSetManager.+Finished task ($FLOAT) in stage ($FLOAT) /,\1,\2/
+s/\(TID ($INT)\) in ($INT) ms on ($HOST) /,\1,\2,\3/
+s/\(($INT)\/($INT)\).*/,\1,\2/
+EOF
+}
+parse_job()
+{
+	cat <<EOF
+s/.INFO.DAGScheduler.+Job ([[:digit:]]+) finished:/,\1/
+s/[[:space:]]*([[:alnum:]]*) at ([[:alnum:]]*\.scala):([[:digit:]]+),/,\1,\2,\3,/
+s/[[:space:]]*took[[:space:]]*([[:digit:]]+\.[[:digit:]]+) s.*/\1/
+EOF
+}
+
+parse_log() {
+	# choose which sed script to call based on the class
+	case "$class" in
+		DAGScheduler)
+			sed_script=parse_job
+			;;
+		TaskSetManager)
+			sed_script=parse_task
+			;;
+	esac
+
+	if [ -n "$sed_script" ]; then
+		msg "Parsing $class with rule $sed_script"
+		grep "$class" "$1" \
+			| sed -r -f <($sed_script) \
+			| sed -e '/.*INFO.*/d'
+		return 0
+	fi
+	return 1
+}
+
+optstring="C:Mfd:t:m:p"
+while getopts "$optstring" opt; do
+	case "$opt" in
+		C)
+			read -a classes <<< "$OPTARG"
+			;;
+		M)
+			time_in_milli="true"
+			;;
+		d)
+			delimiter="$OPTARG"
+			;;
+		t)
+			timeformat="$OPTARG"
+			;;
+		m)
+			log_type="$OPTARG"
+			;;
+		:)
+			error "-$opt requires argument" 
+			exit 1
+			;; 
+		?)
+			error invalid option
+			exit 1
+			;; 
+	esac
+done
+shift $((OPTIND - 1))
+
+if (($# == 0)); then
+	disp_opts -h -n 50 $0 2>/dev/null
+	exit 0
+fi
+
+if [ -z "$timeformat" ]; then
+	if [ -n "$time_in_milli" ]; then
+		timeformat='[0-9]+'
+		msg "-M specified; using $timeformat"
+	else
+		timeformat='%Y/%m/%d %H:%M:%S'
+		msg "-t <timeformat> unspecified; using $timeformat"
+	fi
+fi
+
+if [ -z "$classes" ]; then
+	error "No classes specified; exiting"
+	disp_opts -h -n 50 $0 2>/dev/null
+	exit 1
+fi
+
+if [ -z "$delimiter" ]; then
+	# turns out that an ampersand is one of the few good
+	# symbols not used for much in spark logging.
+	delimiter='[ :&]'
+fi
+
+len=${#classes[@]}
+
+for log in "$@"; do
+
+	if [ ! -r "$log" ]; then
+		error "File is not readable: $log"
+		continue
+	fi
+
+	for k in $(seq 0 $((len-1)) ); do
+
+		class=${classes[k]}
+		filtered_log=$(mktemp)
+		if [ ! -r "$filtered_log" ]; then
+			error "Could not write tmpfile: $filtered_log"
+			exit 1
+		fi
+
+		spark_filter_logs \
+			-d "$delimiter" \
+			-t "$timeformat" \
+			-C "$class" \
+			-m "$log_type" \
+			"$log" \
+			> $filtered_log
+
+		if [ -n "$time_in_milli" ]; then
+			parse_log $filtered_log
+		else
+
+			if ! t0=$(get_start_time "$log"); then
+				error "Could not parse t0=$t0 from $log using $timeformat:"
+				error $(head -n 1 "$log")
+				exit $?
+			fi
+
+			# this is pretty wasteful, but it's wasteful not to store ms anyway
+			paste -d ',' \
+				<(parse_log $filtered_log | cut -d',' -f1 | get_elapsed_time) \
+				<(parse_log $filtered_log | cut --complement -d "," -f1 )
+		fi
+
+		rm $filtered_log
+		echo
+
+	done
+
+done
+

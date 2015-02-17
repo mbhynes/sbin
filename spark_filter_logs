@@ -1,0 +1,129 @@
+#!/bin/bash
+#
+# spark_filter_logs [-M]illiseconds [-i]gnoreCase [-t timeFormat] [-C ClassName] [-m (ERROR|INFO|WARN)] [-s stringToMatch ] [log1 log2 ...]
+#
+# Filter script for Apache spark logs. 
+#
+# Search the stderr logs for messages of type -m msg from -C class
+# =================================================
+# Author: Michael B Hynes, mbhynes@uwaterloo.ca
+# License: GPL 3
+# Creation Date: Mon 16 Feb 2015 12:16:01 PM EST
+# Last Modified: Tue 17 Feb 2015 12:06:06 AM EST
+# =================================================
+
+timeformat=""
+class=""
+log_type=""
+_delim=""
+ignore_case_flag=""
+print_pattern_and_exit=""
+string_to_search=""
+
+SCRIPT_NAME=$(basename $0)
+msg () {
+	echo "$SCRIPT_NAME: $@" 1>&2
+}
+warn () {
+	msg WARNING: $@
+}
+error () {
+	msg ERROR: $@
+}
+
+optstring="Ms:ifd:t:C:m:p"
+while getopts "$optstring" opt; do
+	case "$opt" in
+		M)
+			time_in_millis="true"
+			;;
+		s)
+			string_to_search="$OPTARG"
+			;;
+		i)
+			ignore_case_flag="true"
+			;;
+		d)
+			_delim="$OPTARG"
+			;;
+		t)
+			timeformat="$OPTARG"
+			;;
+		C)
+			class="$OPTARG"
+			;;
+		m)
+			log_type="$OPTARG"
+			;;
+		p)
+			print_pattern_and_exit="true"
+			;;
+		:)
+			error "-$opt requires argument" 
+			exit 1
+			;; 
+		?)
+			error invalid option
+			exit 1
+			;; 
+	esac
+done
+shift $((OPTIND - 1))
+
+if [ -z "$timeformat" ]; then
+	timeformat='%Y/%m/%d %H:%M:%S'
+	msg "-t <timeformat> unspecified; using $timeformat"
+	msg "The format should match that used in \$SPARK_HOME/conf/log4j.properties"
+fi
+
+if [ -z "$class" ]; then
+	class='\<[A-Z][[:alnum:]]*\>'
+	msg "-C <class> unspecified; using $class"
+fi
+
+if [ -z "$log_type" ]; then
+	log_type='(INFO|ERROR|WARN)'
+	msg "-m <msgType> unspecified; using $log_type"
+fi
+
+if [ -z "$_delim" ]; then
+	_delim='[ :&]'
+	msg "-d delim unspecified; using \"$_delim\""
+	msg "The delimiter should match the console delim in \$SPARK_HOME/conf/log4j.properties"
+fi
+
+if [ -z "$time_in_millis" ]; then
+	time_regex=$(dateregex "$timeformat")
+else
+	time_regex='[0-9]+'
+fi
+
+if [ -n "$string_to_search" ]; then
+	pattern="^$time_regex$_delim$log_type_$delim$class$_delim.*$string_to_search.*"
+else
+	pattern="^$time_regex$_delim$log_type$_delim$class$_delim"
+fi
+
+if (($# == 0)) && [ -z "$print_pattern_and_exit" ]; then
+	disp_opts -h -n 30 $0 2>/dev/null
+	exit 0
+fi
+
+if [ -n "$print_pattern_and_exit" ]; then
+	echo "$pattern"
+	exit 0
+fi
+
+for log in "$@"; do
+	if [ ! -r "$log" ]; then
+		error "File is not readable: $log"
+		continue
+	fi
+
+	if [ -n "$ignore_case_flag" ]; then
+		grep -Ehi -e "$pattern" -- "$log"
+	else
+		grep -Eh -e "$pattern" -- "$log"
+	fi
+done
+
