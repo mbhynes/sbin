@@ -1,0 +1,179 @@
+#!/bin/bash
+#
+# latex_header
+#
+# Bash functions to quickly produce latex documents:
+#		begin_document() -- preample
+#		end_document()  -- close
+#		subsection() -- new sub seciton
+#		section()  -- new section
+#		newpage() \newpage
+#		clearpage() \clearpage
+#		figure()  -- insert \FIG
+#		longtable() -- insert \LONGTAB 
+#		table() -- insert \TAB 
+#		code() -- insert \lstinputlistin{}
+#		subcode()  -- insert \lstinputlistin{} with linerange
+#
+# =================================================
+# Author: Michael B Hynes, mbhynes@uwaterloo.ca
+# License: GPL 3
+# Creation Date: Tue 17 Feb 2015 01:29:47 PM EST
+# Last Modified: Tue 17 Feb 2015 04:12:14 PM EST
+# =================================================
+
+begin_document() {
+cat <<EOF
+\\documentclass[12pt]{article}
+\\usepackage{listings}
+\\usepackage{graphicx}
+\\usepackage{hyperref}
+\\usepackage{longtable}
+\\usepackage{geometry}
+\\usepackage{verbatim}
+\\usepackage[usenames,dvipsnames]{color}
+
+\\lstset{
+    language=C,
+    basicstyle=\\footnotesize\\ttfamily,
+		frame=single,
+    tabsize=2,
+    breakatwhitespace=true,
+    breaklines=true,
+    commentstyle=\\color{Purple},
+    stringstyle=\\color{Red},
+    keywordstyle=\\color{Green}\\bfseries,
+		numbers=left
+}
+
+\\date{$(date)}
+\\author{$USER@$HOSTNAME}
+\\newgeometry{left=2in,right=2in,top=0.5cm,bottom=0.5cm}
+
+\\newcommand{\\FIG}[3]{
+	\\begin{figure}[htb!]
+		\\centering
+		\\includegraphics[width=#2\\columnwidth,angle=0]{#1}
+		\\caption{#3}
+		\\label{fig:#1}
+	\\end{figure}
+}
+
+\\newcommand{\\TAB}[2]{
+	\\begin{table}[htb!]
+	{
+		\\footnotesize
+		\\input{#1}
+	}
+		\\caption{#2}
+		\\label{tab:#1}
+	\\end{table}
+}
+
+\\newcommand{\\LONGTAB}[2]{
+	\\begin{longtable}
+	\\input{#1}
+		\\caption{#2}
+		\\label{tab:#1}
+	\\end{longtable}
+}
+
+\\newcommand{\\CODE}[2]{
+	\\lstinputlisting[language=#2]{#1}
+}
+
+
+\\newcommand{\\eqn}[1]{Eq.~(\\ref{#1})}
+\\newcommand{\\fig}[1]{Fig.~\\ref{fig:#1}}
+\\newcommand{\\tab}[1]{Tab.~\\ref{tab:#1}}
+
+\\begin{document}
+%\\twocolumn
+% \\maketitle
+% \\tableofcontents
+% \\newpage
+EOF
+}
+
+#=====================================
+subsection() {
+	title=$(echo $1 | tr '_' ' ')
+	echo "\\subsection{$title}"
+}
+
+#=====================================
+section() {
+	title=$(echo $1 | tr '_' ' ')
+	echo "\\section{$title}"
+}
+
+newpage() {
+	echo '\newpage'
+}
+
+clearpage() {
+	echo "\\clearpage"
+}
+
+end_document() {
+	cat <<EOF
+\\end{document}
+EOF
+}
+
+figure() {
+	file=$1
+	caption=$(echo $2 | tr '_' ' ')
+	echo "\\FIG{$file}{0.95}{$caption}"
+	if [ "$HAS_PLACEINS" ]
+	then
+		echo "\\FloatBarrier"
+	fi
+}
+
+longtable() {
+	file=$1
+	caption=$(echo $2 | tr '_' ' ')
+	echo "\\LONGTAB{$file}{$caption}"
+	if [ "$HAS_PLACEINS" ]
+	then
+		echo "\\FloatBarrier"
+	fi
+}
+
+table() {
+	file=$1
+	caption=$(echo $2 | tr '_' ' ')
+	echo "\\TAB{$file}{$caption}"
+	if [ "$HAS_PLACEINS" ]
+	then
+		echo "\\FloatBarrier"
+	fi
+}
+
+code() {
+	file=$1
+	language=$2
+	cat <<EOF
+{
+	\newgeometry{right=1cm,left=1cm,top=1cm,bottom=1cm}
+	\\CODE{$file}{$language}
+}
+EOF
+}
+
+subcode() {
+	file=$1
+	language=$2
+	line1=$3
+	line2=$4
+	cat <<EOF
+{
+	\newgeometry{right=1cm,left=1cm,top=1cm,bottom=1cm}
+	\\lstinputlisting[language=$language,
+			firstline=$line1,
+			lastline=$line2,
+			firstnumber=$line1]{$file}
+}
+EOF
+}

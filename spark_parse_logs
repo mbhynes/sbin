@@ -70,14 +70,36 @@ get_elapsed_time ()
 		| rmoffset -f '"%g,"' -a "$t0" -
 }
 
+# parse block info for worker logs
+parse_shuffleblock_fetcher_iterator()
+{
+	host=$(grep -Eo -m 1 'himrod-[[:digit:]]+' "$log")
+	msg $name
+	cat <<EOF
+s/.INFO.ShuffleBlockFetcherIterator.Getting ($INT) non-empty blocks out of ($INT) blocks.*/,\1,\2,$host/
+EOF
+}
+
+# parse block manager info on driver logs
+#t,Broadcast#,BroadcastSub#,Host
+parse_block_manager_info()
+{
+	cat <<EOF
+s/.INFO.BlockManagerInfo.*Removed broadcast_($INT)_piece($INT) on ($HOST):$INT.*/,\1,\2,\3/
+EOF
+}
+
+#t,Stage#,Task#,TID,Duration,Host,Task#,TotalTasksInStage
 parse_task()
 {
 	cat <<EOF
-s/.INFO.TaskSetManager.+Finished task ($FLOAT) in stage ($FLOAT) /,\1,\2/
+s/.INFO.TaskSetManager.+Finished task ($FLOAT) in stage ($FLOAT) /,\2,\1/
 s/\(TID ($INT)\) in ($INT) ms on ($HOST) /,\1,\2,\3/
 s/\(($INT)\/($INT)\).*/,\1,\2/
 EOF
 }
+
+#t,Stage#,Action,File,Line#,Duration
 parse_job()
 {
 	cat <<EOF
@@ -96,13 +118,19 @@ parse_log() {
 		TaskSetManager)
 			sed_script=parse_task
 			;;
+		ShuffleBlockFetcherIterator)
+			sed_script=parse_shuffleblock_fetcher_iterator
+			;;
+		BlockManagerInfo)
+			sed_script=parse_block_manager_info
+			;;
 	esac
 
 	if [ -n "$sed_script" ]; then
 		msg "Parsing $class with rule $sed_script"
 		grep "$class" "$1" \
 			| sed -r -f <($sed_script) \
-			| sed -e '/.*INFO.*/d'
+			| sed -e '/.*INFO.*/d; /.*ERROR.*/d; /.*WARN.*/d'
 		return 0
 	fi
 	return 1
@@ -140,6 +168,9 @@ shift $((OPTIND - 1))
 
 if (($# == 0)); then
 	disp_opts -h -n 50 $0 2>/dev/null
+	echo
+	echo "Available Classes for -C \"class1 class2 ...\":"
+	grep -Eo '^[[:space:]]*[A-Z][a-Z]+\)' $0
 	exit 0
 fi
 
@@ -156,6 +187,10 @@ fi
 if [ -z "$classes" ]; then
 	error "No classes specified; exiting"
 	disp_opts -h -n 50 $0 2>/dev/null
+	echo
+	echo "Available Classes for -C \"class1 class2 ...\":"
+	grep -Eo '^[[:space:]]*[A-Z][a-Z]+\)' $0
+	grep -Eo '[A-Z][A-z]+\)' $0
 	exit 1
 fi
 
@@ -183,6 +218,7 @@ for log in "$@"; do
 			exit 1
 		fi
 
+		msg "Filtering $log for $class messages $log_type"
 		spark_filter_logs \
 			-d "$delimiter" \
 			-t "$timeformat" \
@@ -203,8 +239,8 @@ for log in "$@"; do
 
 			# this is pretty wasteful, but it's wasteful not to store ms anyway
 			paste -d ',' \
-				<(parse_log $filtered_log | cut -d',' -f1 | get_elapsed_time) \
-				<(parse_log $filtered_log | cut --complement -d "," -f1 )
+				<(parse_log $filtered_log | cut -d ',' -f1 | get_elapsed_time) \
+				<(parse_log $filtered_log | cut --complement -d ',' -f1 )
 		fi
 
 		rm $filtered_log
