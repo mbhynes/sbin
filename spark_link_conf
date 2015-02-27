@@ -3,13 +3,13 @@
 # spark_link_conf [-d sparkConfDir] [dir]
 # 
 # Make symlinks in the ~/spark/conf to the
-# configuration files specified in dir.
+# configuration files specified in -d sparkConfDir, if they exist.
 #
 # =================================================
 # Author: Michael B Hynes, mbhynes@uwaterloo.ca
 # License: GPL 3
 # Creation Date: Sun 15 Feb 2015 03:11:16 PM EST
-# Last Modified: Sun 15 Feb 2015 03:30:01 PM EST
+# Last Modified: Fri 27 Feb 2015 08:40:20 AM EST
 # =================================================
 
 srcdir=""
@@ -41,8 +41,18 @@ while getopts "$optstring" opt; do
 done
 shift $((OPTIND - 1))
 
-if [ -z "$srcdir" ] || [ ! -d "$srcdir" ]; then
-	error "Not a valid directory or src unspecfied: -d \"$srcdir\""
+if (($# == 0)); then
+	disp_opts -h -n 12 $0 2>/dev/null
+	exit 1
+fi
+
+if [ -z "$srcdir" ]; then
+	error "-d srcdir unspecfied"
+	exit 1
+fi
+
+if [ ! -d "$srcdir" ]; then
+	error "-d $srcdir is not a valid directory"
 	exit 1
 fi
 

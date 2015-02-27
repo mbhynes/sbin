@@ -1,25 +1,23 @@
 #!/bin/bash
-# 
-# spark_run -d outputDir -C Class assembly.jar [extra.jar extra2.jar ...]
 #
-# spark_run -v[erbose] -L[ogsCopied] [-M slaveMem] [-N AppName] [-v(erbose)] -d outputDir -C Class assembly.jar
-# 
-# Run a spark application, assembly.jar, on the cluster. Time it, and
-# extract the ganglia metrics for the execution to -d outputDir.
-# 
-#	Optionally specify slaveMem, AppName, and (main) Class
+# spark_run_local [-d outputDir] [-C Class] assembly.jar
+#
+# spark_run_local -v[erbose] -L[ogsCopied] [-M memory] [-N AppName] [-v(erbose)] -d outputDir -C Class assembly.jar
+#
+# Run spark-submit in local mode. Specific to local 
+# laptop development.
+#
+#	Optionally specify AppName, and (main) Class
 # 
 #	If no classname is given, you will be prompted for one, since it is
 # the entry point to Spark execution (main).
-# 
-# Extra jars to send to the driver can also be specified.
 # 
 # This script will call . spark_vars for global definitions.
 # =================================================
 # Author: Michael B Hynes, mbhynes@uwaterloo.ca
 # License: GPL 3
 # Creation Date: Tue 17 Feb 2015 10:45:57 PM EST
-# Last Modified: Wed 18 Feb 2015 12:18:24 AM EST
+# Last Modified: Fri 27 Feb 2015 08:45:09 AM EST
 # =================================================
 
 SLAVE_MEM_ARG=""
@@ -51,23 +49,23 @@ get_time() {
 }
 
 # parse commandline arguments
-GETOPT_STRING="vj:C:M:N:d:L"
+GETOPT_STRING="vj:C:N:d:LM:"
 while getopts $GETOPT_STRING opt; do
 	case $opt in
+		v)
+			VERBOSE="true"
+			;;
 		M)
-			SLAVE_MEM="$OPTARG"
+			MEMORY="$OPTARG"
 			;;
 		N)
-			NAME="$OPTARG"
+			APPLICATION_NAME="$OPTARG"
 			;;
 		d)
 			OUT_DIR="$OPTARG"
 			;;
 		C)
-			CLASS="$OPTARG"
-			;;
-		v)
-			VERBOSE="true"
+			CLASS_NAME="$OPTARG"
 			;;
 		L)
 			GET_LOGS="true"
@@ -100,48 +98,44 @@ if [ -z "$JAR" ] || [ ! -f "$JAR" ]; then
 fi
 
 if [ -z "$OUT_DIR" ]; then
-	error "-d outputDir unspecified; exiting"
-	exit 1
+	OUT_DIR=$(newdir $(tr -d ' ' <<< "$CLASS_NAME" | tr 'A-Z' 'a-z'))
+	warn "-d outputDir unspecified; using $OUT_DIR"
 fi
 
-if [ -z "$CLASS" ]; then
+if [ -z "$CLASS_NAME" ]; then
 	warn "Classname unspecified"
-	read -p "Enter classname >>> " CLASS
+	read -p "Enter classname >>> " CLASS_NAME
 fi
 
-if [ -z "$NAME" ]; then
-	NAME=$(tr 'A-Z' 'a-z' <<< "$CLASS")-$t_start
+if [ -z "$APPLICATION_NAME" ]; then
+	APPLICATION_NAME=$(tr 'A-Z' 'a-z' <<< "$CLASS_NAME")-$t_start
 fi
 
 if [ -z "$SLAVE_MEM" ]; then
 	SLAVE_MEM="$SPARK_MAX_MEM"
 fi
 
-msg "Rnning $JAR:$CLASS on the cluster and saving to $OUT_DIR."
+msg "Running $JAR:$CLASS_NAME locally and saving output to $OUT_DIR."
 t_start=$(get_time)
 if [ -n "$VERBOSE" ]; then
 	# VERBOSE option: use tee to copy stderr to stdout
 	spark-submit \
-		--deploy-mode $SPARK_DEPLOY_MODE \
-		--name $NAME \
-		--class $CLASS \
-		--master $SPARK_MASTER_URL \
-		--driver-memory $SPARK_DRIVER_MEM \
-		--executor-memory $SLAVE_MEM \
-		$JAR \
-		$@  \
+		--master 'local[*]' \
+		--name "$APPLICATION_NAME" \
+		--class "$CLASS_NAME" \
+		--driver-memory "$MEMORY" \
+		"$JAR" \
+		"$@"  \
 		1> >(tee $SPARK_LOG_STDOUT) \
-		2> >(tee $SPARK_LOG_STDERR | grep 'Job [[:digit:]]+ finished')
+		2> >(tee $SPARK_LOG_STDERR | grep -Ei -e 'job')
 else
 	spark-submit \
-		--deploy-mode $SPARK_DEPLOY_MODE \
-		--name $NAME \
-		--class $CLASS \
-		--master $SPARK_MASTER_URL \
-		--driver-memory $SPARK_DRIVER_MEM \
-		--executor-memory $SLAVE_MEM \
-		$JAR \
-		$@  \
+		--master 'local[*]' \
+		--name "$APPLICATION_NAME" \
+		--class "$CLASS_NAME" \
+		--driver-memory "$MEMORY" \
+		"$JAR" \
+		"$@"  \
 		1> >(tee $SPARK_LOG_STDOUT) \
 		2> $SPARK_LOG_STDERR
 fi
@@ -150,62 +144,39 @@ t_end=$(get_time)
 STATUS="$?"
 
 if [ "$STATUS" -ne 0 ]; then
-# 	cat <<EOF 
-# FAILURE: spark-submit exited with status "$STATUS" 
-# Exiting catastrophically. 
-# You may have to clean up "$SPARK_LOG_DIR/$NAME/" 
-# EOF 
 	cat <<EOF
-FAILURE: spark-submit exited with status "$STATUS" 
+FAILURE: spark-submit exited with status: "$STATUS" 
 Exiting catastrophically. 
-You may have to clean up "$SPARK_LOG_DIR/$NAME/" 
+You may have to clean up "$SPARK_LOG_DIR/$APPLICATION_NAME/" 
 EOF
 	JOB_FAILED="true"
 fi
 
-# this doesn't work in 1.3-SNAPSHOT
-# get the spark directory $NAME-120398429103, (CLASS-timestamp)
-# spark_dir=$(ls -d $SPARK_LOG_DIR/$NAME-* 2>/dev/null)
-
-# rename to output directory
-if [ -n "$OUT_DIR" ]; then
-
-	# this doesn't work in 1.3-SNAPSHOT
-	# if [ -d "$OUT_DIR" ] && [ -d "$spark_dir" ]; then
-	# 	mv $spark_dir/* $OUT_DIR
-	# 	rmdir $spark_dir
-	# else
-	# 	mv $spark_dir $OUT_DIR
-	# fi
-
+msg "Saving stderr and stdour in $OUT_DIR"
+if [ -n "$OUT_DIR" ] && [[ "$OUT_DIR" != "$PWD" ]]; then
 	mv $SPARK_LOG_STDERR $OUT_DIR
 	mv $SPARK_LOG_STDOUT $OUT_DIR
-
 	cd $OUT_DIR
 fi
 
 # copy worker logs
 if [ -n "$GET_LOGS" ]; then
-
 	log_dir=$(get_worker_logs)
 
 	if [ -d "$log_dir" ]; then
-		echo "Copying $log_dir/ to $SPARK_WORKER_LOGS/" 1>&2
+		msg "Copying $log_dir/ to $OUT_DIR/$SPARK_WORKER_LOGS/" 
 		rsync -az --exclude='*.jar' "$log_dir/" $SPARK_WORKER_LOGS
 	fi
 fi
 
 # save t_start and t_end to filter afterwards
+msg "Saving t0:$t_start to $OUT_DIR/$SPARK_LOG_TIME"
+msg "Saving t1:$t_start to $OUT_DIR/$SPARK_LOG_TIME"
 echo $t_start > $SPARK_LOG_TIME
 echo $t_end >> $SPARK_LOG_TIME
 
 # save exit status to file in current dir
+msg "Saving status:$STATUS to $SPARK_EXIT_STATUS"
 echo $STATUS > "$SPARK_EXIT_STATUS"_"$STATUS"
-
-# compile ganglia metrics
-mkdir -p "$GANGLIA_DATA_DIR"
-cd "$GANGLIA_DATA_DIR"
-rrdcsv $GANGLIA_METRICS 1>$GANGLIA_NODE_ORDER 2>$GANGLIA_LOG_STDERR
-cd "$OLD_PWD"
 
 exit $STATUS
