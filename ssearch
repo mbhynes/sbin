@@ -111,8 +111,7 @@ display_and_edit()
 
 #============================================================
 opts="wet:iFd:"
-while getopts $opts opt
-do
+while getopts $opts opt; do
 	case $opt in
 		e)
 			exact_match="true"

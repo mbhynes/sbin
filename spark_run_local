@@ -17,7 +17,7 @@
 # Author: Michael B Hynes, mbhynes@uwaterloo.ca
 # License: GPL 3
 # Creation Date: Tue 17 Feb 2015 10:45:57 PM EST
-# Last Modified: Fri 27 Feb 2015 08:45:09 AM EST
+# Last Modified: Thu 19 Mar 2015 11:05:08 AM EDT
 # =================================================
 
 SLAVE_MEM_ARG=""
@@ -49,9 +49,13 @@ get_time() {
 }
 
 # parse commandline arguments
-GETOPT_STRING="vj:C:N:d:LM:"
+GETOPT_STRING="c:vj:C:N:d:LM:"
 while getopts $GETOPT_STRING opt; do
 	case $opt in
+		c)
+			num_cores="$OPTARG"
+			msg "Running with $num_cores local executors"
+			;;
 		v)
 			VERBOSE="true"
 			;;
@@ -92,6 +96,10 @@ JAR=$1
 # load all defaults in spark vars
 . spark_vars
 
+if [ -z "$num_cores" ]; then
+	num_cores='*'
+fi
+
 if [ -z "$JAR" ] || [ ! -f "$JAR" ]; then
 	error "jar: $JAR could not be found or is not a regular file"
 	exit 1
@@ -120,7 +128,7 @@ t_start=$(get_time)
 if [ -n "$VERBOSE" ]; then
 	# VERBOSE option: use tee to copy stderr to stdout
 	spark-submit \
-		--master 'local[*]' \
+		--master "local[$num_cores]" \
 		--name "$APPLICATION_NAME" \
 		--class "$CLASS_NAME" \
 		--driver-memory "$MEMORY" \
@@ -130,7 +138,7 @@ if [ -n "$VERBOSE" ]; then
 		2> >(tee $SPARK_LOG_STDERR | grep -Ei -e 'job')
 else
 	spark-submit \
-		--master 'local[*]' \
+		--master "local[$num_cores]" \
 		--name "$APPLICATION_NAME" \
 		--class "$CLASS_NAME" \
 		--driver-memory "$MEMORY" \
