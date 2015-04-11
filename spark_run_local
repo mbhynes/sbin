@@ -17,7 +17,7 @@
 # Author: Michael B Hynes, mbhynes@uwaterloo.ca
 # License: GPL 3
 # Creation Date: Tue 17 Feb 2015 10:45:57 PM EST
-# Last Modified: Thu 19 Mar 2015 11:05:08 AM EDT
+# Last Modified: Fri 10 Apr 2015 07:29:51 PM EDT
 # =================================================
 
 SLAVE_MEM_ARG=""
@@ -147,20 +147,23 @@ else
 		1> >(tee $SPARK_LOG_STDOUT) \
 		2> $SPARK_LOG_STDERR
 fi
-t_end=$(get_time)
-
 STATUS="$?"
+t_end=$(get_time)
 
 if [ "$STATUS" -ne 0 ]; then
 	cat <<EOF
+
 FAILURE: spark-submit exited with status: "$STATUS" 
-Exiting catastrophically. 
 You may have to clean up "$SPARK_LOG_DIR/$APPLICATION_NAME/" 
+
+First exception in:
+
 EOF
+	grep -m 1 -A 10 -n 'Exception in ' $SPARK_LOG_STDERR
 	JOB_FAILED="true"
 fi
 
-msg "Saving stderr and stdour in $OUT_DIR"
+msg "Saving stderr and stdout in $OUT_DIR"
 if [ -n "$OUT_DIR" ] && [[ "$OUT_DIR" != "$PWD" ]]; then
 	mv $SPARK_LOG_STDERR $OUT_DIR
 	mv $SPARK_LOG_STDOUT $OUT_DIR
