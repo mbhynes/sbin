@@ -22,6 +22,8 @@ function dump()
 	do
 		# rrdtool dump $1 | sed -e '1,38d' | sed -r -e "s/$FORMAT/\1 \2/" | sed -e "/[[:space:]]*<\/[[:alpha:]]*>/d"
 		rrdtool dump $1 | sed -r -e "1,38d; s/$FORMAT/\1$GANGLIA_DELIM\2/; /[[:space:]]*<\/[[:alpha:]]*>/d"
+		# rrdtool dump $1 | sed -r -e "1,38d; s/$FORMAT/\1$GANGLIA_DELIM\2/; /[[:space:]]*<\/[[:alpha:]]*>/d" | head -n 100 1>&2
+		# rrdtool dump $1 | head -n 20 1>&2
 		shift
 	done
 }
@@ -75,17 +77,19 @@ function compile_metrics()
 
 if (( $# == 0))
 then
-	echo "usage: $0 [metric1 metric2 ...]"
-	echo
-	echo "compile specified metrics, write them to files in the PWD"
-	echo
-	echo "to compile *all* metrics, run: "
-	echo "$0 all"
-	echo
-	echo "note: himrod files are storaged in:"
-	echo "/var/lib/ganglia/rrds/himrod/"
-	echo
-	echo "errors are reported to stderr"
+	cat <<EOF
+ usage: $0 [metric1 metric2 ...]
+
+ compile specified metrics, write them to files in the PWD
+
+ to compile *all* metrics, run: 
+ $0 all
+
+ note: himrod files are storaged in:
+ /var/lib/ganglia/rrds/himrod/
+
+ errors are reported to stderr
+EOF
 	exit
 fi
 

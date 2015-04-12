@@ -17,7 +17,7 @@
 # Author: Michael B Hynes, mbhynes@uwaterloo.ca
 # License: GPL 3
 # Creation Date: Tue 17 Feb 2015 10:45:57 PM EST
-# Last Modified: Fri 10 Apr 2015 07:29:51 PM EDT
+# Last Modified: Sat 11 Apr 2015 12:06:48 AM EDT
 # =================================================
 
 SLAVE_MEM_ARG=""
@@ -108,6 +108,11 @@ fi
 if [ -z "$OUT_DIR" ]; then
 	OUT_DIR=$(newdir $(tr -d ' ' <<< "$CLASS_NAME" | tr 'A-Z' 'a-z'))
 	warn "-d outputDir unspecified; using $OUT_DIR"
+fi
+
+if [ ! -d "$OUT_DIR" ]; then
+	warn "Creating $OUT_DIR"
+	mkdir -p "$OUT_DIR"
 fi
 
 if [ -z "$CLASS_NAME" ]; then

@@ -8,6 +8,7 @@ if (($# == 0)); then
 	echo Input directories must have been created/processed by spark_run.
 	echo
 	echo Metrics to process are defined by \$GANGLIA_METRICS in spark_vars 
+	exit
 fi
 
 #==============================================
