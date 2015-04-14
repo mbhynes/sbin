@@ -1,4 +1,14 @@
 #!/bin/bash
+#
+# plot_iters
+#
+# Ganglia plot metrics
+# =================================================
+# Author: Michael B Hynes, mbhynes@uwaterloo.ca
+# License: GPL 3
+# Creation Date: Tue 14 Apr 2015 03:01:03 PM EDT
+# Last Modified: Tue 14 Apr 2015 04:15:22 PM EDT
+# =================================================
 
 . spark_vars
 
@@ -19,7 +29,7 @@ for m in $GANGLIA_METRICS; do
 		-x "Iteration Time (s)" \
 		-L "$SPARK_SLAVE_NAMES" \
 		-P "bmargin horizontal" \
-		-f "Courier,Bold,20" \
+		-f "Times,Bold,20" \
 		-T "postscript eps" \
 		-o "$fout" \
 		$fin >/dev/null

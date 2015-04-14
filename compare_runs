@@ -90,7 +90,8 @@ process_metric()
 		meanstd -s -1 -f "$fieldsep" \
 			-c "$colspan" \
 			$d/$mfile_slaves \
-			> $d/$mfile_slaves_mean
+			> $d/$mfile_slaves_mean \
+			2>/dev/null
 
 		# generate histogram of average node
 		hist \
@@ -99,7 +100,8 @@ process_metric()
 			-b 50 \
 			-f "$fieldsep" \
 		 	$d/$mfile_slaves \
-			> $hist_tmpfile
+			> $hist_tmpfile \
+			2>/dev/null
 
 		meanstd \
 			-s \
@@ -107,7 +109,8 @@ process_metric()
 			-f "$fieldsep" \
 			-c "$colspan" \
 			$hist_tmpfile \
-			> $d/$mfile_slaves_hist
+			> $d/$mfile_slaves_hist \
+			2>/dev/null
 
 		# plot all nodes' data for single metric
 		gplotcols \
@@ -119,7 +122,7 @@ process_metric()
 			-f "Courier,Bold,20" \
 			-T "postscript eps" \
 			-o $DIR/$GANGLIA_IMG_DIR/$m.eps \
-			$d/$mfile_slaves >/dev/null
+			$d/$mfile_slaves 1>&2 2>/dev/null
 
 		files="$files $d/$mfile"
 		hist_files="$hist_files $d/$mfile_slaves_hist"
@@ -144,7 +147,7 @@ process_metric()
 		-f "Courier,Bold,20" \
 		-T "postscript eps" \
 		-o $GANGLIA_IMG_DIR/$m-master.eps \
-		$master_files >/dev/null
+		$master_files 1>&2 2>/dev/null
 
 	# plot mean metrics from each input directory
 	gplot \
@@ -156,7 +159,7 @@ process_metric()
 		-f "Courier,Bold,20" \
 		-T "postscript eps" \
 		-o $GANGLIA_IMG_DIR/$m-mean.eps \
-		$mean_files >/dev/null
+		$mean_files 1>&2 >/dev/null
 
 	# plot histogram of metrics from each input directory
 	gplot \
@@ -168,7 +171,7 @@ process_metric()
 		-f "Courier,Bold,20" \
 		-T "postscript eps" \
 		-o $GANGLIA_IMG_DIR/$m-hist.eps \
-		$hist_files >/dev/null
+		$hist_files 1>&2 2>/dev/null
 		# $hist_files 
 
 	rm $hist_tmpfile

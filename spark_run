@@ -103,10 +103,6 @@ if [ -z "$OUT_DIR" ]; then
 	OUT_DIR="$PWD"
 fi
 
-if [ ! -d "$OUT_DIR" ]; then
-	mkdir -p "$OUT_DIR"
-fi
-
 if [ -z "$CLASS" ]; then
 	warn "Classname unspecified"
 	read -p "Enter classname >>> " CLASS
@@ -119,6 +115,9 @@ fi
 if [ -z "$SLAVE_MEM" ]; then
 	SLAVE_MEM="$SPARK_MAX_MEM"
 fi
+
+mkdir -p "$OUT_DIR"
+cd "$OUT_DIR"
 
 msg "Rnning $JAR:$CLASS on the cluster and saving to $OUT_DIR."
 t_start=$(get_time)
@@ -133,8 +132,8 @@ if [ -n "$VERBOSE" ]; then
 		--executor-memory $SLAVE_MEM \
 		$JAR \
 		$@  \
-		1> >(tee $SPARK_LOG_STDOUT) \
-		2> >(tee $SPARK_LOG_STDERR | grep 'Job [[:digit:]]+ finished')
+		1> >(tee "$SPARK_LOG_STDOUT") \
+		2> >(tee "$SPARK_LOG_STDERR" | grep 'Job [[:digit:]]+ finished')
 else
 	spark-submit \
 		--deploy-mode $SPARK_DEPLOY_MODE \
@@ -145,8 +144,8 @@ else
 		--executor-memory $SLAVE_MEM \
 		$JAR \
 		$@  \
-		1> >(tee $SPARK_LOG_STDOUT) \
-		2> $SPARK_LOG_STDERR
+		1> >(tee "$SPARK_LOG_STDOUT") \
+		2> "$SPARK_LOG_STDERR"
 fi
 STATUS="$?"
 t_end=$(get_time)
@@ -158,20 +157,12 @@ FAILURE: spark-submit exited with status "$STATUS"
 Exiting catastrophically. 
 You may have to clean up "$SPARK_LOG_DIR/$NAME/" 
 
-First Exception:
-
 EOF
-	grep -A 1 -m 1 'Exception in' "$SPARK_LOG_STDERR"
+	if grep -q 'Exception in' "$SPARK_LOG_STDERR"; then
+		echo "First Exception:"
+		grep -n -A 1 -m 1 'Exception in' "$SPARK_LOG_STDERR"
+	fi
 	JOB_FAILED="true"
-fi
-
-# rename to output directory
-if [ -n "$OUT_DIR" ]; then
-
-	mv $SPARK_LOG_STDERR $OUT_DIR
-	mv $SPARK_LOG_STDOUT $OUT_DIR
-
-	cd $OUT_DIR
 fi
 
 # copy worker logs

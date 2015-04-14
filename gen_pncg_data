@@ -1,0 +1,157 @@
+#!/bin/bash
+#
+# gen_pncg_data <spark_stdout>
+#
+# Generate the f,g, and time per iteration data from an output logfile
+#
+# =================================================
+# Author: Michael B Hynes, mbhynes@uwaterloo.ca
+# License: GPL 3
+# Creation Date: Sat 11 Apr 2015 10:49:33 PM EDT
+# Last Modified: Tue 14 Apr 2015 03:25:58 PM EDT
+# =================================================
+
+. spark_vars
+
+# set constants 
+TCOL=1 # real time (epoch seconds)
+KCOL=3 # iteration number
+FCOL_PNCG=7
+GCOL_PNCG=6
+FCOL_ALS=4
+GCOL_ALS=5
+REGEX='^[[:digit:]]+:[[:space:]]*[ALSPNCG]+:[[:space:]]*[[:digit:]]+:'
+delim=":"
+format="%g$delim%g\n"
+
+is_als_log() {
+	grep -q -m 1 -e 'ALS:' "$logfile"
+	return $?
+}
+
+print_filtered_lines() {
+	grep -E -e "$REGEX" "$logfile"
+}
+
+# print_values <$col> $logfile
+print_values() { 
+	col="$@"
+	if [ -n "$use_abs_time" ]; then
+		t_col=$TCOL 
+		print_filtered_lines \
+			| cut -d "$delim" -f $t_col,$col \
+			| rmoffset -f "'$format'" -c 1 - 2>/dev/null
+	else
+		t_col=$KCOL 
+		print_filtered_lines \
+			| cut -d "$delim" -f $t_col,$col
+	fi
+}
+
+# octave script to get the iteration time as the diff of the real time
+time_diff_script() {
+	cat <<EOF
+		t = dlmread(stdin,'');
+		n = length(t);
+		printf("$format", [1:(n-1); diff(t)']);
+EOF
+}
+
+print_time_per_iteration() {
+	print_filtered_lines \
+		| cut -d "$delim" -f $TCOL \
+		| octave -q <(time_diff_script)
+}
+
+SCRIPT_NAME=$(basename $0)
+msg () {
+	echo "$SCRIPT_NAME: $@" 1>&2
+}
+warn () {
+	msg WARNING: $@
+}
+error () {
+	msg ERROR: $@
+}
+
+if (($# == 0)); then
+	disp_opts -h -n 10 $0 2>/dev/null
+	exit 0
+fi
+
+optstring="T0d:fgtk"
+while getopts "$optstring" opt; do
+	case "$opt" in
+		0)
+			delay_flag="-0 $OPTARG" 	# for spark_read_iters -0 <delay>
+			;;
+		d)
+			output_dir_flag="-d $OPTARG" 	# for spark_read_iters -d <output_dir>
+			;;
+		f)
+			print_f="true"
+			;;
+		g)
+			print_g="true"
+			;;
+		t)
+			use_abs_time="true"
+			;;
+		T)
+			print_iter_time="true"
+			;;
+		k)
+			gen_iter_metrics="true"
+			;;
+		:)
+			error "-$opt requires argument" 
+			;; 
+		?)
+			error invalid option
+			;; 
+	esac
+done
+shift $((OPTIND - 1))
+
+for logfile in "$@"; do
+
+	logdir=$(dirname $logfile)
+
+	if [ -n "$gen_iter_metrics" ]; then
+		msg "Generating ganglia metrics per iteration from $logfile"
+		# check for ganglia dir
+		ganglia_dir="$logdir/$GANGLIA_DATA_DIR"
+		if [ ! -d "$ganglia_dir" ]; then
+			error "$ganglia_dir is not a valid directory; cannot run spark_read_iters"
+		else
+			spark_read_iters $delay_flag -r "$REGEX" -f "$delim" $output_dir_flag -g "$ganglia_dir"  "$logfile"
+		fi
+	fi
+
+	if [ -n "$print_iter_time" ]; then
+		msg "Computing the time duration per iteration from $logfile"
+		print_time_per_iteration
+	fi
+
+	if [ -n "$print_f" ]; then
+		msg "Printing f from $logfile"
+		if is_als_log; then
+			print_values $FCOL_ALS
+		else
+			print_values $FCOL_PNCG
+		fi
+	fi
+
+	if [ -n "$print_g" ]; then
+		msg "Printing g from $logfile"
+		if is_als_log; then
+			print_values $GCOL_ALS
+		else
+			print_values $GCOL_PNCG
+		fi
+	fi
+
+done
+
+# grep -E -e "$REGEX" "$logfile"
+# meanstd -s -1 -d 2 -c 2:8 it-4/cpu_idle-fil  | rmoffset -c 1

@@ -1,6 +1,6 @@
 #!/bin/bash
 # 
-# spark_read_iters
+# spark_read_iters [logfile1 logfile2 ...]
 #
 # Read the timestamps in a file with format:
 # timestamp<field_sep>dat<field_sep>dat ...
@@ -78,7 +78,7 @@ print_metrics_per_iteration()
 
 		pair="-1 $((t1-delay)) -2 $((t2+delay))"
 
-		iter_dir="$outputdir/$iter_dir_prefix$((k+1))"
+		iter_dir="$(newdir -t '' -d "$outputdir/$iter_dir_prefix")"
 		if [ ! -d "$iter_dir" ]; then
 			mkdir -p "$iter_dir"
 		fi
