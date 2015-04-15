@@ -79,6 +79,11 @@ print_metrics_per_iteration()
 		pair="-1 $((t1-delay)) -2 $((t2+delay))"
 
 		iter_dir="$(newdir -t '' -d "$outputdir/$iter_dir_prefix")"
+		if ((k==0)) && [ -d "$iter_dir" ]; then
+			error "$iter_dir already exists; remove it first to replace its contents"
+			exit 1
+		fi
+
 		if [ ! -d "$iter_dir" ]; then
 			mkdir -p "$iter_dir"
 		fi
@@ -87,22 +92,25 @@ print_metrics_per_iteration()
 		s_flag="-s $suffix"
 		m_flag="-m '$metrics' "
 
-		msg "Running filter_metrics $pair $d_flag $m_flag $s_flag $iter_dir 1>&2"
+		_cmd="filter_metrics $print_average_flag $use_rel_time_flag $pair $d_flag $s_flag \"$ganglia_metrics_dir\" "
+		msg "Running $_cmd"
 
-		filter_metrics \
-			$pair \
-			$d_flag \
-			$s_flag \
-			"$ganglia_metrics_dir"
+		filter_metrics $print_average_flag $use_rel_time_flag $pair $d_flag $s_flag "$ganglia_metrics_dir" &
 
 	done
 
 	return 0
 }
 
-optstring="0:m:s:d:g:r:f:p:"
+optstring="AR0:m:s:d:g:r:f:p:"
 while getopts $optstring opt; do
 	case $opt in
+		A)
+			print_average_flag="-A"
+			;;
+		R)
+			use_rel_time_flag="-R"
+			;;
 		0)
 			delay="$OPTARG"
 			;;
@@ -194,5 +202,5 @@ for file in "$@"; do
 		echo "$(basename $0): Warning: $file is not readable" 1>&2
 		continue
 	fi
-	print_metrics_per_iteration 
+	print_metrics_per_iteration
 done

@@ -41,7 +41,7 @@ error () {
 	msg ERROR: $@
 }
 
-optstring="1:2:m:s:d:"
+optstring="1:2:m:s:d:RA"
 while getopts $optstring opt; do
 	case $opt in
 		d)
@@ -58,6 +58,12 @@ while getopts $optstring opt; do
 			;;
 		2) 
 			t2="$OPTARG"
+			;;
+		R)
+			use_rel_time="true"
+			;;
+		A)
+			compute_slave_average="true"
 			;;
 		?)
 			error "invalid option -$opt" 
@@ -103,7 +109,27 @@ for d in "$@"; do
 		for m in $metrics; do
 			if [ -r "$d/$m" ]; then
 				fout="$outputdir/$m$output_file_suffix"
-				rrd_filter_time -1 $t1 -2 $t2 $d/$m > $fout
+				if [ -n "$use_rel_time" ]; then
+					rrd_filter_time -1 $t1 -2 $t2 $d/$m \
+						| rmoffset -c 1 -f "'%8.4e$GANGLIA_DELIM'" \
+						> $fout
+				else
+					rrd_filter_time -1 $t1 -2 $t2 $d/$m > $fout
+				fi
+
+				if [ -n "$compute_slave_average" ]; then
+
+					# generate a histogram of the values
+					# this is a bad spot for this, but it's just convenient here
+					cut -d "$GANGLIA_DELIM" -f 1,2  --complement "$fout" \
+						| tr "$GANGLIA_DELIM" '\n' \
+						| hist -N -b 15 -f "'%8.4e$GANGLIA_DELIM'" > "$fout-bin"
+
+					# compute the averages of the metrics
+					cols=$(ncols -d "$GANGLIA_DELIM" $fout)
+					meanstd -s -c [3:$cols] -1 "$fout" > "$fout-avg"
+				fi
+
 			else
 				error "$d/$m is not readable" 
 			fi

@@ -8,7 +8,7 @@
 # Author: Michael B Hynes, mbhynes@uwaterloo.ca
 # License: GPL 3
 # Creation Date: Sat 11 Apr 2015 10:49:33 PM EDT
-# Last Modified: Tue 14 Apr 2015 03:25:58 PM EDT
+# Last Modified: Wed 15 Apr 2015 06:02:47 PM EDT
 # =================================================
 
 . spark_vars
@@ -65,7 +65,9 @@ print_time_per_iteration() {
 
 SCRIPT_NAME=$(basename $0)
 msg () {
-	echo "$SCRIPT_NAME: $@" 1>&2
+	if [ -n "$verbose_flag" ]; then
+		echo "$SCRIPT_NAME: $@" 1>&2
+	fi
 }
 warn () {
 	msg WARNING: $@
@@ -79,9 +81,12 @@ if (($# == 0)); then
 	exit 0
 fi
 
-optstring="T0d:fgtk"
+optstring="vT0d:fgtak"
 while getopts "$optstring" opt; do
 	case "$opt" in
+		v)
+			verbose_flag="true"
+			;;
 		0)
 			delay_flag="-0 $OPTARG" 	# for spark_read_iters -0 <delay>
 			;;
@@ -99,6 +104,9 @@ while getopts "$optstring" opt; do
 			;;
 		T)
 			print_iter_time="true"
+			;;
+		a)
+			print_avg_iter_time="true"
 			;;
 		k)
 			gen_iter_metrics="true"
@@ -124,13 +132,19 @@ for logfile in "$@"; do
 		if [ ! -d "$ganglia_dir" ]; then
 			error "$ganglia_dir is not a valid directory; cannot run spark_read_iters"
 		else
-			spark_read_iters $delay_flag -r "$REGEX" -f "$delim" $output_dir_flag -g "$ganglia_dir"  "$logfile"
+			spark_read_iters -A -R $delay_flag -r "$REGEX" -f "$delim" -d "$logdir/iters" -g "$ganglia_dir"  "$logfile"
 		fi
 	fi
 
-	if [ -n "$print_iter_time" ]; then
+	if [ -n "$print_iter_time" ] || [ -n "$print_avg_iter_time" ]; then
 		msg "Computing the time duration per iteration from $logfile"
-		print_time_per_iteration
+		if [ -n "$print_avg_iter_time" ]; then
+			# print_time_per_iteration | meanstd -d 1 -s -c 2 
+			print_time_per_iteration \
+				| meanstd -d 1 -s -c 2 -f "'$format'" 2>/dev/null
+		else
+			print_time_per_iteration
+		fi
 	fi
 
 	if [ -n "$print_f" ]; then

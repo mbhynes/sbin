@@ -1,0 +1,137 @@
+#!/bin/bash
+#
+# plot_metrics [dir1 dir2 ...]
+#
+# plot metrics per iteration for the specified iterations
+# =================================================
+# Author: Michael B Hynes, mbhynes@uwaterloo.ca
+# License: GPL 3
+# Creation Date: Wed 15 Apr 2015 04:48:08 PM EDT
+# Last Modified: Wed 15 Apr 2015 06:13:27 PM EDT
+# =================================================
+
+. spark_vars
+
+iter_dir=iters
+iter_prefix=it-
+num_chars=3
+suffix=-fil-bin
+
+prepend_zeros() {
+	n=$1
+	len=${#s}
+	while ((len < num_chars)); do
+		n=0$n
+		len=${#n}
+	done
+	echo $n
+}
+
+SCRIPT_NAME=$(basename $0)
+msg () {
+	echo "$SCRIPT_NAME: $@" 1>&2
+}
+warn () {
+	msg WARNING: $@
+}
+error () {
+	msg ERROR: $@
+}
+
+optstring="wk:m:L:"
+while getopts $optstring opt; do
+	case $opt in
+		w)
+			within_runs="true" # determines if plot is across different runs or not
+			;;
+		k)
+			iterations="$OPTARG"
+			;;
+		m)
+			metrics="$OPTARG"
+			;;
+		s)
+			suffix="$OPTARG" # suffix of file in $iters/it-k/metric{-fil,-avg, etc}
+			;;
+		L)
+			legend="$OPTARG"
+			;;
+		A)
+			compute_slave_average="true"
+			;;
+		?)
+			error "invalid option -$opt" 
+			;;
+		:)
+			error "-$opt requires argument"
+			exit 1
+			;;
+	esac
+done
+
+shift $((OPTIND-1))
+
+if (($# == 0)); then
+	disp_opts -h -n 30 $0 
+	exit 1
+fi
+
+if [ -z "$metrics" ]; then
+	metrics="$GANGLIA_METRICS"
+fi
+
+if [ -z "$iterations" ]; then
+	iterations=1
+fi
+
+for m in $metrics; do
+	msg "Compiling graphs for: $m"
+
+	for logdir in "$@"; do
+
+		files=""
+		auto_legend=""
+
+		# within runs; each input arg is the dir
+		if [ -n "$within_runs" ]; then
+			for k in $iterations; do
+				iter=$(prepend_zeros $k)
+				f="$logdir/$iter_dir/$iter_prefix$iter/$m$suffix"
+				if [ -r "$f" ]; then
+					msg "Adding $f to plot"
+					files="$files $f"
+					auto_legend="$auto_legend Iteration\ $k"
+				else
+					warn "$f is not a valid file; skipping"
+				fi
+			done
+			fout="$logdir/$iter_dir/$m.eps"
+			# msg "Saving plot to $fout"
+			# gplot -F -P "" -L "$auto_legend" -x "$(tr _ ' '  <<<$m)" -y "Probability" -o "$fout" $files >/dev/null
+		else
+
+			for k in $iterations; do
+				iter=$(prepend_zeros $k)
+				f="$logdir/$iter_dir/$iter_prefix$iter/$m$suffix"
+				if [ -r "$f" ]; then
+					msg "Adding $f to plot"
+					files="$files $f"
+					auto_legend="$auto_legend $logdir-$k"
+				else
+					warn "$f is not a valid file; skipping"
+				fi
+			done
+			fout="$m.eps"
+		fi
+
+		if [ -z "$legend" ]; then
+			leg="$auto_legend"
+		else
+			leg="$legend"
+		fi
+
+		msg "Saving plot to $fout"
+		gplot -F -P "" -L "$leg" -x "$(tr _ ' '  <<<$m)" -y "Distribution" -o "$fout" $files >/dev/null
+
+	done
+done

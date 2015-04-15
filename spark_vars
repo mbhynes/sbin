@@ -11,7 +11,8 @@
 # by spark shell scripts.
 #===================================
 
-export SPARK_LOCAL_DIRS=$HOME/stmp 	
+export SPARK_SLAVE_HOME=/tmp
+export SPARK_LOCAL_DIRS=/tmp
 
 # defaults for spark master 
 export SPARK_MASTER_NAME=himrod
@@ -41,8 +42,8 @@ export SPARK_DEPLOY_MODE="client"
 # event logging directories logging
 export SPARK_LOG_DIR=$(grep -E '^spark.eventLog.dir' $SPARK_CONFIG_DIR/spark-defaults.conf | \
 	sed -r -e 's/.*[[:space:]]+(.*)/\1/')
-export SPARK_WORKER_LOG_DIR=$HOME/logs
-export SPARK_WORKER_DIR=$HOME/swork
+export SPARK_WORKER_LOG_DIR=$SPARK_SLAVE_HOME
+export SPARK_WORKER_DIR=$SPARK_SLAVE_HOME
 
 # variables for spark_run 
 # the following directories/files will be created by spark_run
