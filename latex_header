@@ -48,7 +48,7 @@ cat <<EOF
 
 \\date{$(date)}
 \\author{$USER@$HOSTNAME}
-\\newgeometry{left=2in,right=2in,top=0.5cm,bottom=0.5cm}
+\\newgeometry{left=1in,right=1in,top=0.5cm,bottom=0.5cm}
 
 \\newcommand{\\FIG}[3]{
 	\\begin{figure}[htb!]
@@ -123,26 +123,33 @@ EOF
 
 figure() {
 	file=$1
+	if [ ! -r "$file" ]; then
+		return 1
+	fi
 	caption=$(echo $2 | tr '_' ' ')
 	echo "\\FIG{$file}{0.95}{$caption}"
-	if [ "$HAS_PLACEINS" ]
-	then
+	if [ "$HAS_PLACEINS" ]; then
 		echo "\\FloatBarrier"
 	fi
 }
 
 longtable() {
 	file=$1
+	if [ ! -r "$file" ]; then
+		return 1;
+	fi
 	caption=$(echo $2 | tr '_' ' ')
 	echo "\\LONGTAB{$file}{$caption}"
-	if [ "$HAS_PLACEINS" ]
-	then
+	if [ "$HAS_PLACEINS" ]; then
 		echo "\\FloatBarrier"
 	fi
 }
 
 table() {
 	file=$1
+	if [ ! -r "$file" ]; then
+		return 1;
+	fi
 	caption=$(echo $2 | tr '_' ' ')
 	echo "\\TAB{$file}{$caption}"
 	if [ "$HAS_PLACEINS" ]
@@ -153,6 +160,9 @@ table() {
 
 code() {
 	file=$1
+	if [ ! -r "$file" ]; then
+		return 1;
+	fi
 	language=$2
 	cat <<EOF
 {
@@ -164,6 +174,10 @@ EOF
 
 subcode() {
 	file=$1
+	if [ ! -r "$file" ]; then
+		return 1;
+	fi
+
 	language=$2
 	line1=$3
 	line2=$4

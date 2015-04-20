@@ -8,7 +8,7 @@
 # Author: Michael B Hynes, mbhynes@uwaterloo.ca
 # License: GPL 3
 # Creation Date: Sat 11 Apr 2015 10:49:33 PM EDT
-# Last Modified: Wed 15 Apr 2015 06:02:47 PM EDT
+# Last Modified: Fri 17 Apr 2015 05:55:09 PM EDT
 # =================================================
 
 . spark_vars
@@ -22,7 +22,7 @@ FCOL_ALS=4
 GCOL_ALS=5
 REGEX='^[[:digit:]]+:[[:space:]]*[ALSPNCG]+:[[:space:]]*[[:digit:]]+:'
 delim=":"
-format="%g$delim%g\n"
+format="%10.8g$delim%10.8g\n"
 
 is_als_log() {
 	grep -q -m 1 -e 'ALS:' "$logfile"
@@ -133,6 +133,11 @@ for logfile in "$@"; do
 			error "$ganglia_dir is not a valid directory; cannot run spark_read_iters"
 		else
 			spark_read_iters -A -R $delay_flag -r "$REGEX" -f "$delim" -d "$logdir/iters" -g "$ganglia_dir"  "$logfile"
+
+			if [ $? ]; then
+				error "spark_read_iters failed; exiting"
+				exit 1
+			fi
 		fi
 	fi
 
@@ -167,5 +172,6 @@ for logfile in "$@"; do
 
 done
 
+exit 0
 # grep -E -e "$REGEX" "$logfile"
 # meanstd -s -1 -d 2 -c 2:8 it-4/cpu_idle-fil  | rmoffset -c 1

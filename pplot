@@ -1,0 +1,228 @@
+#!/bin/bash
+#
+# generate plots for a PNCG/ALS test run
+# pplot [dir1 dir2 ...]
+#
+# =================================================
+# Author: Michael B Hynes, mbhynes@uwaterloo.ca
+# License: GPL 3
+# Creation Date: Tue 14 Apr 2015 03:58:26 PM EDT
+# Last Modified: Sun 19 Apr 2015 05:07:54 PM EDT
+# =================================================
+
+. spark_vars
+
+gen_avg() { #$files
+	for file in "$@"; do
+		meanstd -f "'%g:'" -d 1 -s -c 2 "$file"
+	done
+}
+
+plot() {
+	if grep -q t <<<$@; then
+		ylabel="Iteration Time (s)"
+	else
+		ylabel="y"
+	fi
+	xlabel='Iteration'
+	gplot \
+		-e \
+		-d ":" \
+		-s "$GANGLIA_PLOT_SIZE" \
+		-y "$ylabel" \
+		-x "$xlabel" \
+		-L "$legend" \
+		-P "bmargin horizontal" \
+		-o "$fout" \
+		$@ 
+}
+
+semilogy() {
+	if grep -q g <<<$@; then
+		ylabel="|g|/N"
+	else
+		ylabel="|f - f^*|"
+	fi
+	if [ -n "$abs_time_flag" ]; then
+		xlabel='Elapsed Time (s)'
+	else
+		xlabel='Iteration'
+	fi
+	gplot \
+		-d ":" \
+		-Z \
+		-s "$GANGLIA_PLOT_SIZE" \
+		-y "$ylabel" \
+		-x "$xlabel" \
+		-L "$legend" \
+		-P "bmargin horizontal" \
+		-o "$fout" \
+		$@ 
+}
+get_rank() {
+	sed -r -e 's/.*_f([[:digit:]]+)_.*/\1/'
+}
+
+# scale the gradient by the degrees of freedom
+scale_g_mfile() {
+	nmovies=27278
+	nusers=138493
+	msg $(basename $datadir)
+	f=$(get_rank <<<"$(basename $datadir)")
+	N=$(( f*(nmovies + nusers) )) # movies + users
+	msg "scaling by $f => $N"
+	cat <<eof
+	g = dlmread(stdin,'');
+	G = [g(:,1), sqrt(g(:,2)) / $N ]; 
+	fprintf('%d:%10.8g\n', G');
+eof
+}
+
+#  of freedom
+diff_mfile() {
+	cat <<eof
+	v = dlmread(stdin,'');
+	V = [v(1:end-1,1), abs((v(1:end-1,2) - v(end,2)))]; 
+	fprintf('%10.8g:%10.8g\n', V');
+eof
+}
+
+SCRIPT_NAME=$(basename $0)
+msg () {
+	echo "$SCRIPT_NAME: $@" 1>&2
+}
+warn () {
+	msg WARNING: $@
+}
+error () {
+	msg ERROR: $@
+}
+
+if (($# == 0)); then
+	disp_opts -h -n 10 $0 2>/dev/null
+	exit 0
+fi
+
+optstring="b:Rx:AT0d:fgtk"
+while getopts "$optstring" opt; do
+	case "$opt" in
+		b)
+			num_bins="-b $OPTARG"
+			;;
+		R)
+			recompute_nums="-R"
+			;;
+		x)
+			plot_xvals="$OPTARG" # use for -T switch to plot execution time
+			;;
+		A)
+			run_all_and_compile_report="true"
+			report_file="$OPTARG"
+			;;
+		0)
+			delay_flag="-0 $OPTARG" 	# for spark_read_iters -0 <delay>
+			;;
+		d)
+			output_dir_flag="-d $OPTARG" 	# for spark_read_iters -d <output_dir>
+			;;
+		f)
+			print_f="true"
+			;;
+		g)
+			print_g="true"
+			;;
+		t)
+			abs_time_flag="-t"
+			;;
+		T)
+			print_t="true"
+			;;
+		k)
+			gen_iter_metrics="true"
+			;;
+		:)
+			error "-$opt requires argument" 
+			;; 
+		?)
+			error invalid option
+			;; 
+	esac
+done
+shift $((OPTIND - 1))
+
+
+nfiles=$#
+legend=""
+plotfiles=""
+
+k=0
+for datadir in "$@"; do
+	legend="$legend $(basename $datadir)"
+
+	plotfiles="$plotfiles p$k"
+	fin="$datadir/$SPARK_LOG_STDOUT"
+
+	# if [ -n "$gen_iter_metrics" ]; then
+	# 	msg "Generating iteration metric data from $fin"
+	# 	gen_pncg_data -k "$(seq 1 2)" "$fin"
+	# 	plot_metrics -k "$(seq 1 2)" -w "$datadir"
+	# fi
+
+	# generate the f data
+	if [ -n "$print_f" ]; then
+		fout=f$k
+		msg "Generating f data from $fin"
+		gen_pncg_data -f $abs_time_flag "$fin" \
+			| octave -q <(diff_mfile) \
+			> $fout 
+	fi
+
+	# generate the g data
+	if [ -n "$print_g" ]; then
+		fout=g$k
+		msg "Generating g data from $fin"
+		gen_pncg_data -g $abs_time_flag "$fin" \
+		 	| octave -q <(scale_g_mfile)	\
+			> $fout
+	fi
+
+	# generate the t data
+	if [ -n "$print_t" ]; then
+		fout=t$k
+		msg "Generating t data from $fin"
+		gen_pncg_data -T "$fin" > $fout
+	fi
+
+	((k++))
+done 
+
+if [ -n "$print_f" ]; then
+	files=$(tr p f <<<"$plotfiles")
+	fout="f.eps"
+	msg "Plotting $files in $fout"
+	semilogy "$files"
+fi
+if [ -n "$print_g" ]; then
+	files=$(tr p g <<<"$plotfiles")
+	fout="g.eps"
+	msg "Plotting $files in $fout"
+	semilogy "$files"
+fi
+if [ -n "$print_t" ]; then
+	files=$(tr p t <<<"$plotfiles")
+	fout="tvt.eps"
+	msg "Plotting $files in $fout"
+	plot $files
+	gen_avg $files > t.avg
+
+	# plot iteration time against given x-values 
+	if [ -n "$plot_xvals" ]; then
+		paste -d : <(tr ' ' '\n' <<<"$plot_xvals") t.avg > t
+		gplot -d : -e -o t.eps -x " " -y "Iteration Time (s)" t
+	fi
+fi
+
+if [ -n "$gen_iter_metrics" ]; then
+	plot_metrics $num_bins $recompute_nums $@
+fi
+

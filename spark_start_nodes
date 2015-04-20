@@ -1,0 +1,83 @@
+#!/bin/bash
+# 
+# spark_start_nodes -n <num_nodes>
+#
+# Quick script to run with only a specified number of nodes
+#
+# This script will run head -n <num_nodes> on $SPARK_CONFIG_DIR/slaves,
+# and truncate it to fewer nodes.
+#
+# The original file backuped up and then copied to its original form.
+#
+# =================================================
+# Author: Michael B Hynes, mbhynes@uwaterloo.ca
+# License: GPL 3
+# Creation Date: Sat 18 Apr 2015 06:49:30 PM EDT
+# Last Modified: Sat 18 Apr 2015 07:21:29 PM EDT
+# =================================================
+
+. spark_vars
+
+slave_file="$SPARK_CONFIG_DIR/slaves"
+if [ -r "$slave_file" ]; then
+	num_nodes=$(wc -l < "$slave_file")
+else
+	num_nodes=0
+fi
+
+SCRIPT_NAME=$(basename $0)
+msg () {
+	echo "$SCRIPT_NAME: $@" 1>&2
+}
+warn () {
+	msg WARNING: $@
+}
+error () {
+	msg ERROR: $@
+}
+
+
+optstring="n:s:"
+while getopts "$optstring" opt; do
+	case "$opt" in
+		s)
+			sleep_time="$OPTARG"
+			;;
+		n)
+			num_nodes="$OPTARG"
+			;;
+		:)
+			error "-$opt requires argument" 
+			;; 
+		?)
+			error invalid option
+			;; 
+	esac
+done
+
+if (($# == 0)); then
+	disp_opts -h -n 10 $0 2>/dev/null
+	exit 0
+fi
+
+# stop all the nodes + restart the master
+stop-all.sh
+start-master.sh
+
+# copy spark config slave file to backup
+cp $slave_file{,.backup}
+
+# truncate -n num_nodes of slaves file
+if ((num_nodes > 0)); then
+	head -n "$num_nodes" "$slave_file".backup > "$slave_file"
+else
+	error "You can't run with 0 nodes, stooopid."
+fi
+
+start-slaves.sh
+
+if [ -n "$sleep_time" ]; then
+	sleep "$sleep_time"
+fi
+
+mv "$slave_file"{.backup,}

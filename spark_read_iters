@@ -78,15 +78,14 @@ print_metrics_per_iteration()
 
 		pair="-1 $((t1-delay)) -2 $((t2+delay))"
 
+		# get a new dirname, but don't create it (-d[ry_run] flag)
 		iter_dir="$(newdir -t '' -d "$outputdir/$iter_dir_prefix")"
 		if ((k==0)) && [ -d "$iter_dir" ]; then
 			error "$iter_dir already exists; remove it first to replace its contents"
 			exit 1
 		fi
 
-		if [ ! -d "$iter_dir" ]; then
-			mkdir -p "$iter_dir"
-		fi
+		mkdir -p "$iter_dir"
 
 		d_flag="-d $iter_dir"
 		s_flag="-s $suffix"

@@ -2,7 +2,6 @@
 # rrd_filter_time t0 t1 file file file ..
 # output values from rrdcsv files only within [t0,t1]
 
-
 get_line_num() 
 {
 	t0=$1
@@ -24,16 +23,16 @@ cat_sub() # $n1 $n2 $file
 if (($# == 0))
 then
 	echo usage: "$0 -1 t1 -2 t2 file file file .."
+	disp_opts -h "$0"
 	exit
 fi
 
-while getopts "1:2:f:" opt
-do
+while getopts "1:2:f:" opt; do
 	case $opt in
 		f)
-			file="$OPTARG"
-			t1=$(head -n 1 $file)
-			t2=$(tail -n 1 $file)
+			time_file="$OPTARG"
+			t1=$(head -n 1 $time_file)
+			t2=$(tail -n 1 $time_file)
 			echo "$(basename $0): using t1=$t1; t2=$t2" 1>&2
 			;;
 		1)
@@ -56,12 +55,10 @@ shift $((OPTIND-1))
 
 NUM_ERRS=0
 
-while (($# > 0))
-do
+while (($# > 0)); do
 	file=$1
 	# if t1/t2 are unspecified, use the beginning or end of tile
-	if [ -n "$t1" ] 
-	then
+	if [ -n "$t1" ]; then
 		n1=$(get_line_num $t1 $file)
 	else
 		echo "$(basename $0) Warning: error in t1: using n1=1" 1>&2
@@ -69,8 +66,7 @@ do
 		# ((NUM_ERRS++))
 	fi
 
-	if [ -n "$t2" ]
-	then
+	if [ -n "$t2" ]; then
 		n2=$(get_line_num $t2 $file)
 	else
 		echo "$(basename $0) Warning: error in t2: using n2=EOF" 1>&2
@@ -93,8 +89,7 @@ do
 	fi	
 
 	# check that numbers are monotonically increasing
-	if ((n1 > n2))
-	then
+	if ((n1 > n2)); then
 		cat_sub $n2 $n1 $file
 	else
 		cat_sub $n1 $n2 $file

@@ -7,11 +7,12 @@
 # Author: Michael B Hynes, mbhynes@uwaterloo.ca
 # License: GPL 3
 # Creation Date: Wed 15 Apr 2015 04:48:08 PM EDT
-# Last Modified: Wed 15 Apr 2015 06:13:27 PM EDT
+# Last Modified: Sun 19 Apr 2015 05:27:05 PM EDT
 # =================================================
 
 . spark_vars
 
+num_bins=20
 iter_dir=iters
 iter_prefix=it-
 num_chars=3
@@ -38,9 +39,15 @@ error () {
 	msg ERROR: $@
 }
 
-optstring="wk:m:L:"
+optstring="Rb:wk:m:L:"
 while getopts $optstring opt; do
 	case $opt in
+		R)
+			recompute_nums="true"
+			;;
+		b)
+			num_bins="$OPTARG"
+			;;
 		w)
 			within_runs="true" # determines if plot is across different runs or not
 			;;
@@ -87,13 +94,11 @@ fi
 for m in $metrics; do
 	msg "Compiling graphs for: $m"
 
-	for logdir in "$@"; do
-
-		files=""
-		auto_legend=""
-
-		# within runs; each input arg is the dir
-		if [ -n "$within_runs" ]; then
+	if [ -n "$within_runs" ]; then
+		for logdir in "$@"; do
+			files=""
+			auto_legend=""
+			# within runs; each input arg is the dir
 			for k in $iterations; do
 				iter=$(prepend_zeros $k)
 				f="$logdir/$iter_dir/$iter_prefix$iter/$m$suffix"
@@ -105,24 +110,50 @@ for m in $metrics; do
 					warn "$f is not a valid file; skipping"
 				fi
 			done
-			fout="$logdir/$iter_dir/$m.eps"
-			# msg "Saving plot to $fout"
-			# gplot -F -P "" -L "$auto_legend" -x "$(tr _ ' '  <<<$m)" -y "Probability" -o "$fout" $files >/dev/null
-		else
 
-			for k in $iterations; do
-				iter=$(prepend_zeros $k)
-				f="$logdir/$iter_dir/$iter_prefix$iter/$m$suffix"
+			if [ -z "$legend" ]; then
+				leg="$auto_legend"
+			else
+				leg="$legend"
+			fi
+			fout="$logdir/$iter_dir/$m.eps"
+			msg "Saving plot to $fout"
+			gplot -F -P "" -L "$auto_legend" -x "$(tr _ ' '  <<<$m)" -y "Probability" -o "$fout" $files >/dev/null
+		done
+
+	else
+
+		files=""
+		auto_legend=""
+
+		for logdir in "$@"; do
+			# for k in $iterations; do
+				# iter=$(prepend_zeros $k)
+				# f="$logdir/$iter_dir/$iter_prefix$iter/$m"
+
+				# generate marginal histogram for metric across the entire run
+				suffix="-bin"
+				fin="$logdir/$GANGLIA_DATA_DIR/$m"
+				f="$fin$suffix"
+
+				# recompute histograms if -R[ecompute] flag is given
+				if [ -n "$recompute_nums" ]; then
+					cols=$(ncols -d "$GANGLIA_DELIM" $fin)
+					rrd_filter_time -f "$logdir/$SPARK_LOG_TIME" "$fin" \
+						| hist -N -p -c [3:$cols] -F -b "$num_bins" -f "'%8.4e$GANGLIA_DELIM'" \
+						| interp -c 2 -n "10*$num_bins" -f "'%8.4e$GANGLIA_DELIM'" - \
+						> "$f"
+				fi
+
 				if [ -r "$f" ]; then
 					msg "Adding $f to plot"
 					files="$files $f"
-					auto_legend="$auto_legend $logdir-$k"
+					auto_legend="$auto_legend $(basename $logdir)-$k"
 				else
 					warn "$f is not a valid file; skipping"
 				fi
-			done
-			fout="$m.eps"
-		fi
+			# done
+		done
 
 		if [ -z "$legend" ]; then
 			leg="$auto_legend"
@@ -130,8 +161,15 @@ for m in $metrics; do
 			leg="$legend"
 		fi
 
+		fout="$m.eps"
 		msg "Saving plot to $fout"
-		gplot -F -P "" -L "$leg" -x "$(tr _ ' '  <<<$m)" -y "Distribution" -o "$fout" $files >/dev/null
+		gplot -d "$GANGLIA_DELIM" \
+			-F -P "bmargin horizontal" \
+			-L "$leg" \
+			-x "$(tr _ ' '  <<<$m)" \
+			-y "Marginal Density" \
+			-o "$fout" \
+			$files >/dev/null
+	fi
 
-	done
 done
