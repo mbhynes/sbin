@@ -7,7 +7,7 @@
 # Author: Michael B Hynes, mbhynes@uwaterloo.ca
 # License: GPL 3
 # Creation Date: Tue 14 Apr 2015 03:58:26 PM EDT
-# Last Modified: Sun 19 Apr 2015 05:07:54 PM EDT
+# Last Modified: Wed 22 Apr 2015 08:52:56 AM EDT
 # =================================================
 
 . spark_vars
@@ -31,7 +31,7 @@ plot() {
 		-s "$GANGLIA_PLOT_SIZE" \
 		-y "$ylabel" \
 		-x "$xlabel" \
-		-L "$legend" \
+		-L "$leg" \
 		-P "bmargin horizontal" \
 		-o "$fout" \
 		$@ 
@@ -54,7 +54,7 @@ semilogy() {
 		-s "$GANGLIA_PLOT_SIZE" \
 		-y "$ylabel" \
 		-x "$xlabel" \
-		-L "$legend" \
+		-L "$leg" \
 		-P "bmargin horizontal" \
 		-o "$fout" \
 		$@ 
@@ -69,7 +69,11 @@ scale_g_mfile() {
 	nusers=138493
 	msg $(basename $datadir)
 	f=$(get_rank <<<"$(basename $datadir)")
-	N=$(( f*(nmovies + nusers) )) # movies + users
+	if egrep -q '^[[:digit:]]+$' <<<"$f"; then
+		N=$(( f*(nmovies + nusers) )) # movies + users
+	else
+		N=1
+	fi
 	msg "scaling by $f => $N"
 	cat <<eof
 	g = dlmread(stdin,'');
@@ -103,9 +107,12 @@ if (($# == 0)); then
 	exit 0
 fi
 
-optstring="b:Rx:AT0d:fgtk"
+optstring="L:b:Rx:AT0d:fgtk"
 while getopts "$optstring" opt; do
 	case "$opt" in
+		L)
+			legend="$OPTARG"
+			;;
 		b)
 			num_bins="-b $OPTARG"
 			;;
@@ -152,12 +159,12 @@ shift $((OPTIND - 1))
 
 
 nfiles=$#
-legend=""
+auto_legend=""
 plotfiles=""
 
 k=0
 for datadir in "$@"; do
-	legend="$legend $(basename $datadir)"
+	auto_legend="$auto_legend $(basename $datadir)"
 
 	plotfiles="$plotfiles p$k"
 	fin="$datadir/$SPARK_LOG_STDOUT"
@@ -195,6 +202,12 @@ for datadir in "$@"; do
 
 	((k++))
 done 
+
+if [ -n "$legend" ]; then
+	leg="$legend"
+else
+	leg="$auto_legend"
+fi
 
 if [ -n "$print_f" ]; then
 	files=$(tr p f <<<"$plotfiles")
