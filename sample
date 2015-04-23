@@ -1,0 +1,109 @@
+#!/bin/bash
+#
+# sample -n <num_users> -o <fout> [fin]
+#
+# Sample product ratings from [fin]
+# =================================================
+# Author: Michael B Hynes, mbhynes@uwaterloo.ca
+# License: GPL 3
+# Creation Date: Wed 22 Apr 2015 05:14:39 PM EDT
+# Last Modified: Wed 22 Apr 2015 07:40:56 PM EDT
+# =================================================
+
+. spark_vars
+
+version=1.0
+scala_version=2.10
+class=himrod.pncg.PNCG
+name=PNCG
+package=pncg
+jar="$package"_"$scala_version"-"$version".jar
+path=$HOME/src/pncg/target/scala-$scala_version
+num_users=""
+fout=""
+
+SCRIPT_NAME=$(basename $0)
+msg () {
+	echo "$SCRIPT_NAME: $@" 1>&2
+}
+warn () {
+	msg WARNING: $@
+}
+error () {
+	msg ERROR: $@
+}
+
+
+optstring="p:n:o:c:"
+while getopts "$optstring" opt; do
+	case "$opt" in
+		p)
+			partitions_per_core="$OPTARG"
+			;;
+		c)
+			num_cores="$OPTARG"
+			;;
+		o)
+			fout="$OPTARG"
+			;;
+		n)
+			num_users="$OPTARG"
+			;;
+		:)
+			error "-$opt requires argument" 
+			;; 
+		?)
+			error invalid option
+			;; 
+	esac
+done
+shift $((OPTIND - 1))
+fin="$1"
+
+if (($# == 0)); then
+	disp_opts -h -n 10 $0 2>/dev/null
+	exit 1
+fi
+
+if [ ! -r "$fin" ]; then
+	error "$fin is not readable"
+	exit 1
+fi
+
+if [ -z "$fout" ] ; then
+	error "No -o <fout> specified"
+	exit 1
+fi
+
+if [ -z "$num_users" ]; then 
+	error "-n <num_users> unspecified"
+ 	exit 1;
+fi
+
+if [ -z "$partitions_per_core" ]; then
+	partitions_per_core=1
+fi
+
+if [ -z "$num_cores" ]; then
+	num_cores=$((SPARK_WORKER_CORES * SPARK_NUM_SLAVES))
+fi
+
+if [ -d "$fout.dir" ]; then
+	rm -r "$fout.dir"
+fi
+spark_run \
+	-d "$(newdir -t '%Y-%m-%d-' sample-)" \
+	-C $class \
+	-N "Sampling-$fin" \
+	"$path/$jar" \
+	--checkpoint "$HOME/swork" \
+	-N "$((partitions_per_core*num_cores))" \
+	-n $num_users \
+	--ratings "$fin" \
+	--saveRatings "$fout.dir"
+
+cat "$fout.dir"/part-* > "$fout"
+rm -r "$fout.dir"
+
+# --hist "$fin".hist \
+# --CDF "$fin".cdf \
