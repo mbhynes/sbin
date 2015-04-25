@@ -1,0 +1,159 @@
+#!/bin/bash
+#
+# gshow [metric1 metric2 ...]
+# =================================================
+# Author: Michael B Hynes, mbhynes@uwaterloo.ca
+# License: GPL 3
+# Creation Date: Thu 23 Apr 2015 10:42:57 AM EDT
+# Last Modified: Thu 23 Apr 2015 11:14:10 AM EDT
+# =================================================
+
+. spark_vars
+
+num_nodes=""
+
+function dump()
+{
+	DATE="[[:digit:] -:EST]+"
+	BLANK="[[:space:]]*"
+	START="<!--"
+
+	FORMAT=".*\/ ([[:digit:]]+) --> <row><v>([[:digit:]\.e+-]+)<\/v><\/row>"
+
+	while (( $# > 0))
+	do
+		rrdtool dump $1 \
+			| sed -r -e "1,38d; s/$FORMAT/\1$GANGLIA_DELIM\2/; /[[:space:]]*<\/[[:alpha:]]*>/d"
+		shift
+	done
+}
+
+function compile_metrics() 
+{
+	m=$1
+	shift
+ 	DIRS=$@
+
+	fout=$(mktemp)
+
+	FIRST=1
+	for d in $DIRS; do
+		if echo $d | grep -q $GANGLIA_EXCLUDE; then 
+			continue
+		fi
+
+		# echo Compiling $d 1>&2
+		if ((FIRST)); then
+			if [ -f $d/$m ]; then
+				FIRST=0
+				dump $d/$m > $fout
+			else 
+				echo ERROR: "$d/$m does not exist" 1>&2
+			fi
+
+		else
+
+			if [ -f $d/$m ]
+			then
+				tmpf=$(tempfile)
+				join $fout <(dump $d/$m) > $tmpf
+
+				if [ $? -eq 0 ]
+				then
+					mv $tmpf $fout
+				else
+					echo ERROR: Could not join $d/$m  1>&2
+					echo ERROR: See the output of \$rrdtool dump $d/$m: 1>&2
+					# dump $d/$m | head -n 10  
+					# rm $tmpf
+				fi
+			else 
+				echo "ERROR: $d/$m does not exist" 1>&2
+			fi
+		fi
+	done
+	tail -n "$num_lines" "$fout"
+	rm $fout
+}
+
+SCRIPT_NAME=$(basename $0)
+msg () {
+	echo "$SCRIPT_NAME: $@" 1>&2
+}
+warn () {
+	msg WARNING: $@
+}
+error () {
+	msg ERROR: $@
+}
+
+optstring="n:N:"
+while getopts "$optstring" opt; do
+	case "$opt" in
+		N)
+			num_nodes="$OPTARG"
+			;;
+		n)
+			num_lines="$OPTARG"
+			;;
+		:)
+			error "-$opt requires argument" 
+			;; 
+		?)
+			error invalid option
+			;; 
+	esac
+done
+shift $((OPTIND - 1))
+
+if (( $# == 0)); then
+	disp_opts -h -n 10 $0 2>/dev/null
+	exit 1
+fi
+
+if [ -z "$num_nodes" ]; then
+	num_nodes=$(wc -l <$SPARK_CONFIG_DIR/slaves)
+	if [ -z "$num_nodes" ]; then
+		error "Can't figure out how many slaves you got, mofo'."
+		exit 1
+	fi
+fi
+
+if [ -z "$num_lines" ]; then
+	num_lines=10
+fi
+
+# set all ganglia directories from to extract rrds
+DIRS="$GANGLIA_SRC/$SPARK_MASTER_NAME"
+for node in $(head -n "$num_nodes" $SPARK_CONFIG_DIR/slaves | tr '\n' ' ')
+do
+	DIRS="$DIRS $GANGLIA_SRC/$node"
+done
+
+if [[ "$1" == "all" ]]
+then
+	METRICS=$(find $DIRS -name '*.rrd' -a ! -wholename "*$GANGLIA_EXCLUDE*" -printf '%f\n' 2>/dev/null | sort | uniq)
+else
+	METRICS=$@
+fi
+
+for d in $DIRS
+do
+	unit=$(basename $d) 
+
+	if [[ "$unit" == "$GANGLIA_EXCLUDE" ]]
+	then 
+		continue
+	fi
+
+	echo -n "$unit " 
+done
+
+for m in $METRICS
+do
+	if [ "$(ext $m)" != ".rrd" ]
+	then
+		m="$m.rrd"
+	fi
+	compile_metrics $m $DIRS
+done

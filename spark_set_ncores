@@ -1,0 +1,62 @@
+#!/bin/bash
+#
+# spark_set_ncores
+# 
+# lazy hack --- modify SPARK_WORKER_CORES in spark_vars
+# =================================================
+# Author: Michael B Hynes, mbhynes@uwaterloo.ca
+# License: GPL 3
+# Creation Date: Sat 25 Apr 2015 11:17:14 AM EDT
+# Last Modified: Sat 25 Apr 2015 11:37:10 AM EDT
+# =================================================
+
+SCRIPT_NAME=$(basename $0)
+msg () {
+	echo "$SCRIPT_NAME: $@" 1>&2
+}
+warn () {
+	msg WARNING: $@
+}
+error () {
+	msg ERROR: $@
+}
+
+
+optstring="c:"
+while getopts "$optstring" opt; do
+	case "$opt" in
+		c)
+			num_cores="$OPTARG"
+			;;
+		:)
+			error "-$opt requires argument" 
+			exit 1
+			;; 
+		?)
+			error invalid option
+			exit 1
+			;; 
+	esac
+done
+
+if (($# == 0)); then
+	disp_opts -h -n 10 $0 2>/dev/null
+	exit 0
+fi
+
+if [ -z "$num_cores" ]; then
+	error "no num_core specified"
+	exit 1
+fi
+
+if ((num_cores < 1)) || ((num_cores > 32)); then
+	error "num_cores is not in the valid range"
+	exit 1
+fi
+
+file=$(which spark_vars)
+if [ -n "$file" ] && [ -r "$file" ]; then
+	sed -i -r -e "s/^export SPARK_WORKER_CORES=[[:digit:]]+$/export SPARK_WORKER_CORES=$num_cores/" "$file" 
+else
+	error "$file could not be found"
+fi

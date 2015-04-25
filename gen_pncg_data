@@ -8,7 +8,7 @@
 # Author: Michael B Hynes, mbhynes@uwaterloo.ca
 # License: GPL 3
 # Creation Date: Sat 11 Apr 2015 10:49:33 PM EDT
-# Last Modified: Fri 17 Apr 2015 05:55:09 PM EDT
+# Last Modified: Fri 24 Apr 2015 09:15:23 AM EDT
 # =================================================
 
 . spark_vars
@@ -122,6 +122,16 @@ done
 shift $((OPTIND - 1))
 
 for logfile in "$@"; do
+
+	if [ -d "$logfile" ]; then
+		# try "$logfile/spark_stdout"
+		logfile="$logfile/$SPARK_LOG_STDOUT"
+		warn "Directory given; trying $logfile"
+		if [ ! -f "$logfile" ]; then
+			warn "$logfile" is not a readable file.
+		fi
+		continue
+	fi
 
 	logdir=$(dirname $logfile)
 

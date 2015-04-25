@@ -1,0 +1,91 @@
+#!/bin/bash
+#
+# gen_slaves -n <num_slaves>
+#
+# print a new $SPARK_CONFIG_DIR/slaves with <num_slaves> in it
+#
+# =================================================
+# Author: Michael B Hynes, mbhynes@uwaterloo.ca
+# License: GPL 3
+# Creation Date: Sat 25 Apr 2015 11:09:40 AM EDT
+# Last Modified: Sat 25 Apr 2015 11:16:12 AM EDT
+# =================================================
+
+. spark_vars
+NUM_ASSIGNED_NODES=6
+
+slave_file="$SPARK_CONFIG_DIR/slaves"
+if [ -r "$slave_file" ]; then
+	num_nodes=$(wc -l < "$slave_file")
+else
+	num_nodes=0
+fi
+
+SCRIPT_NAME=$(basename $0)
+msg () {
+	echo "$SCRIPT_NAME: $@" 1>&2
+}
+warn () {
+	msg WARNING: $@
+}
+error () {
+	msg ERROR: $@
+}
+
+print_all_slaves() {
+	cat <<EOF
+himrod-7
+himrod-8
+himrod-9
+himrod-16
+himrod-17
+himrod-18
+himrod-19
+himrod-20
+himrod-21
+himrod-1
+himrod-2
+himrod-3
+himrod-4
+himrod-5
+himrod-6
+himrod-10
+himrod-11
+himrod-12
+himrod-13
+himrod-14
+himrod-15
+EOF
+}
+
+optstring="n:f"
+while getopts "$optstring" opt; do
+	case "$opt" in
+		n)
+			num_nodes="$OPTARG"
+			;;
+		f)
+			force="true"
+			;;
+		:)
+			error "-$opt requires argument" 
+			;; 
+		?)
+			error invalid option
+			;; 
+	esac
+done
+
+if (($# == 0)); then
+	disp_opts -h -n 10 $0 2>/dev/null
+	exit 0
+fi
+
+if ((num_nodes > $NUM_ASSIGNED_NODES)) && [ -z "$force" ]; then
+	error "$num_nodes > NUM_ASSIGNED_NODES=$NUM_ASSIGNED_NODES; use -f flag to force this"
+	error "Are you sure you've booked the nodes?"
+	exit 1
+fi
+
+print_all_slaves | head -n $num_nodes
+exit 0

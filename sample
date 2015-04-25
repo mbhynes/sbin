@@ -7,7 +7,7 @@
 # Author: Michael B Hynes, mbhynes@uwaterloo.ca
 # License: GPL 3
 # Creation Date: Wed 22 Apr 2015 05:14:39 PM EDT
-# Last Modified: Wed 22 Apr 2015 07:40:56 PM EDT
+# Last Modified: Fri 24 Apr 2015 10:25:58 AM EDT
 # =================================================
 
 . spark_vars
@@ -98,12 +98,18 @@ spark_run \
 	"$path/$jar" \
 	--checkpoint "$HOME/swork" \
 	-N "$((partitions_per_core*num_cores))" \
+	-S \
 	-n $num_users \
 	--ratings "$fin" \
 	--saveRatings "$fout.dir"
 
-cat "$fout.dir"/part-* > "$fout"
-rm -r "$fout.dir"
+files=""
+for f in $(find "$fout.dir" -name "part-*" ); do
+	files="$files $f"
+done
+# cat $files > "$fout"
+# cat "$fout.dir"/part-* > "$fout"
+# rm -r "$fout.dir"
 
 # --hist "$fin".hist \
 # --CDF "$fin".cdf \

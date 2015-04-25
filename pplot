@@ -7,7 +7,7 @@
 # Author: Michael B Hynes, mbhynes@uwaterloo.ca
 # License: GPL 3
 # Creation Date: Tue 14 Apr 2015 03:58:26 PM EDT
-# Last Modified: Wed 22 Apr 2015 08:52:56 AM EDT
+# Last Modified: Thu 23 Apr 2015 12:22:42 PM EDT
 # =================================================
 
 . spark_vars
@@ -107,7 +107,7 @@ if (($# == 0)); then
 	exit 0
 fi
 
-optstring="L:b:Rx:AT0d:fgtk"
+optstring="L:b:Rx:X:AT0d:fgtk"
 while getopts "$optstring" opt; do
 	case "$opt" in
 		L)
@@ -121,6 +121,9 @@ while getopts "$optstring" opt; do
 			;;
 		x)
 			plot_xvals="$OPTARG" # use for -T switch to plot execution time
+			;;
+		X)
+			Xlabel="$OPTARG" # use for -T switch to plot execution time
 			;;
 		A)
 			run_all_and_compile_report="true"
@@ -231,7 +234,7 @@ if [ -n "$print_t" ]; then
 	# plot iteration time against given x-values 
 	if [ -n "$plot_xvals" ]; then
 		paste -d : <(tr ' ' '\n' <<<"$plot_xvals") t.avg > t
-		gplot -d : -e -o t.eps -x " " -y "Iteration Time (s)" t
+		gplot -d : -e -o t.eps -x "$Xlabel" -y "Iteration Time (s)" t
 	fi
 fi
 
