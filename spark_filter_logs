@@ -9,7 +9,7 @@
 # Author: Michael B Hynes, mbhynes@uwaterloo.ca
 # License: GPL 3
 # Creation Date: Mon 16 Feb 2015 12:16:01 PM EST
-# Last Modified: Tue 17 Feb 2015 12:06:06 AM EST
+# Last Modified: Sat 25 Apr 2015 05:31:57 PM EDT
 # =================================================
 
 timeformat=""
@@ -70,6 +70,16 @@ while getopts "$optstring" opt; do
 done
 shift $((OPTIND - 1))
 
+if [ -n "$print_pattern_and_exit" ]; then
+	echo "$pattern"
+	exit 0
+fi
+
+if (($# == 0)) && [ -z "$print_pattern_and_exit" ]; then
+	disp_opts -h -n 30 $0 2>/dev/null
+	exit 0
+fi
+
 if [ -z "$timeformat" ]; then
 	timeformat='%Y/%m/%d %H:%M:%S'
 	msg "-t <timeformat> unspecified; using $timeformat"
@@ -102,16 +112,6 @@ if [ -n "$string_to_search" ]; then
 	pattern="^$time_regex$_delim$log_type_$delim$class$_delim.*$string_to_search.*"
 else
 	pattern="^$time_regex$_delim$log_type$_delim$class$_delim"
-fi
-
-if (($# == 0)) && [ -z "$print_pattern_and_exit" ]; then
-	disp_opts -h -n 30 $0 2>/dev/null
-	exit 0
-fi
-
-if [ -n "$print_pattern_and_exit" ]; then
-	echo "$pattern"
-	exit 0
 fi
 
 for log in "$@"; do

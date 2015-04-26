@@ -4,16 +4,22 @@
 #
 # Print the job information from the Spark stderr logs in format similar to
 # the following for -C DAGScheduler:
-# time_elapsed,job#,action,file,line#,duration
+#
 #
 # Example: (for -C DAGScheduler)
+#
+# time_elapsed,job#,action,file,line#,duration
 # 	3477,157,reduce,ALS.scala,644,204.523488
 # 	3869,158,count,ALS.scala,812,392.043044
 # 	4252,159,count,ALS.scala,816,382.812292
 # 	4479,160,count,ALS.scala,762,227.618045
 #
+# Example -C TaskSetManager
+#	t,Stage#,Task#,TID,Duration,Host,Task#,TotalTasksInStage
+#
 # time_elapsed can be either in seconds or milliseconds, depending on 
 # the format specified in $SPARK_HOME/conf/log4j.properties.
+# If the time format is in milliseconds, specify -M.
 #
 # To print all info to stderr with the timstamp as ms elapsed since 
 # program initiation, use the following log4j settings (note the %r):

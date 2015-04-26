@@ -8,7 +8,7 @@
 # Author: Michael B Hynes, mbhynes@uwaterloo.ca
 # License: GPL 3
 # Creation Date: Sat 25 Apr 2015 11:09:40 AM EDT
-# Last Modified: Sat 25 Apr 2015 11:16:12 AM EDT
+# Last Modified: Sat 25 Apr 2015 11:43:51 AM EDT
 # =================================================
 
 . spark_vars
@@ -55,12 +55,19 @@ himrod-12
 himrod-13
 himrod-14
 himrod-15
+himrod-big-1
+himrod-big-2
+himrod-big-3
+himrod-big-4
 EOF
 }
 
-optstring="n:f"
+optstring="in:f"
 while getopts "$optstring" opt; do
 	case "$opt" in
+		i)
+			in_place="true"
+			;;
 		n)
 			num_nodes="$OPTARG"
 			;;
@@ -87,5 +94,17 @@ if ((num_nodes > $NUM_ASSIGNED_NODES)) && [ -z "$force" ]; then
 	exit 1
 fi
 
+if [ -n "$in_place" ]; then
+	file="$SPARK_CONFIG_DIR/slaves"
+
+	# clobber current slaves file
+	if [ -f "$file" ] && [ -r "$file" ]; then
+		print_all_slaves | head -n $num_nodes > "$file"
+		exit 0
+	else
+		error "$file is not a valid file"
+		exit 1
+	fi
+fi
 print_all_slaves | head -n $num_nodes
 exit 0

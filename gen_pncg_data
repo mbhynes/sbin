@@ -8,7 +8,7 @@
 # Author: Michael B Hynes, mbhynes@uwaterloo.ca
 # License: GPL 3
 # Creation Date: Sat 11 Apr 2015 10:49:33 PM EDT
-# Last Modified: Fri 24 Apr 2015 09:15:23 AM EDT
+# Last Modified: Sun 26 Apr 2015 10:28:31 AM EDT
 # =================================================
 
 . spark_vars
@@ -81,9 +81,12 @@ if (($# == 0)); then
 	exit 0
 fi
 
-optstring="vT0d:fgtak"
+optstring="evT0d:fgtak"
 while getopts "$optstring" opt; do
 	case "$opt" in
+		e)
+			print_exit_status="true"
+			;;
 		v)
 			verbose_flag="true"
 			;;
@@ -121,19 +124,35 @@ while getopts "$optstring" opt; do
 done
 shift $((OPTIND - 1))
 
-for logfile in "$@"; do
+for logfile in $@; do
 
-	if [ -d "$logfile" ]; then
+	msg "$logfile"
+
+	if [ ! -f "$logfile" ]; then
 		# try "$logfile/spark_stdout"
 		logfile="$logfile/$SPARK_LOG_STDOUT"
 		warn "Directory given; trying $logfile"
 		if [ ! -f "$logfile" ]; then
 			warn "$logfile" is not a readable file.
+			continue
 		fi
-		continue
 	fi
 
 	logdir=$(dirname $logfile)
+
+	if [ -n "$print_exit_status" ]; then
+		exit_file=$logdir/spark_exit_status_
+		time_file=$logdir/spark_time
+		if [ -f "$time_file" ]; then
+			t1=$(date -d @$(head -n 1 $logdir/spark_time) )
+			t2=$(date -d @$(tail -n 1 $logdir/spark_time) )
+			echo "$logdir: exit_status_$(cat $exit_file* 2>/dev/null)"
+			echo "		t1=$t1"
+			echo "		t2=$t2"
+		else
+			warn "$time_file does not exist"
+		fi
+	fi
 
 	if [ -n "$gen_iter_metrics" ]; then
 		msg "Generating ganglia metrics per iteration from $logfile"
