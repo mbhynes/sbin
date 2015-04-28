@@ -13,12 +13,11 @@
 # Author: Michael B Hynes, mbhynes@uwaterloo.ca
 # License: GPL 3
 # Creation Date: Sat 18 Apr 2015 06:49:30 PM EDT
-# Last Modified: Sat 18 Apr 2015 07:21:29 PM EDT
+# Last Modified: Mon 27 Apr 2015 03:20:03 PM EDT
 # =================================================
 
 . spark_vars
 
-slave_file="$SPARK_CONFIG_DIR/slaves"
 if [ -r "$slave_file" ]; then
 	num_nodes=$(wc -l < "$slave_file")
 else
@@ -37,9 +36,12 @@ error () {
 }
 
 
-optstring="n:s:"
+optstring="Mn:s:"
 while getopts "$optstring" opt; do
 	case "$opt" in
+		M)
+			restart_master="true"
+			;;
 		s)
 			sleep_time="$OPTARG"
 			;;
@@ -48,9 +50,11 @@ while getopts "$optstring" opt; do
 			;;
 		:)
 			error "-$opt requires argument" 
+			exit 1
 			;; 
 		?)
 			error invalid option
+			exit 1
 			;; 
 	esac
 done
@@ -60,24 +64,31 @@ if (($# == 0)); then
 	exit 0
 fi
 
-# stop all the nodes + restart the master
-stop-all.sh
-start-master.sh
-
-# copy spark config slave file to backup
-cp $slave_file{,.backup}
-
-# truncate -n num_nodes of slaves file
 if ((num_nodes > 0)); then
-	head -n "$num_nodes" "$slave_file".backup > "$slave_file"
+
+	# stop all the nodes + restart the master
+	if [ -n "$restart_master" ]; then
+		stop-all.sh
+	else
+		stop-slaves.sh
+	fi
 else
 	error "You can't run with 0 nodes, stooopid."
+	exit 1
 fi
 
-start-slaves.sh
+gen_slaves -i -f -n $num_nodes
+
+# clean out the checkpoint dir
+rm -r $SPARK_CHECKPOINT_DIR/*
+cleartmp_all 2>&1 >/dev/null
+
+if [ -n "$restart_master" ]; then
+	start-all.sh
+else
+	start-slaves.sh
+fi
 
 if [ -n "$sleep_time" ]; then
 	sleep "$sleep_time"
 fi
-
-mv "$slave_file"{.backup,}

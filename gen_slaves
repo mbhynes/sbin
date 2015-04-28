@@ -8,7 +8,7 @@
 # Author: Michael B Hynes, mbhynes@uwaterloo.ca
 # License: GPL 3
 # Creation Date: Sat 25 Apr 2015 11:09:40 AM EDT
-# Last Modified: Sat 25 Apr 2015 11:43:51 AM EDT
+# Last Modified: Mon 27 Apr 2015 03:17:45 PM EDT
 # =================================================
 
 . spark_vars
@@ -76,9 +76,11 @@ while getopts "$optstring" opt; do
 			;;
 		:)
 			error "-$opt requires argument" 
+			exit 1
 			;; 
 		?)
 			error invalid option
+			exit 1
 			;; 
 	esac
 done
@@ -86,6 +88,11 @@ done
 if (($# == 0)); then
 	disp_opts -h -n 10 $0 2>/dev/null
 	exit 0
+fi
+
+if [ -z "$num_nodes" ] || ((num_nodes < 1)); then
+	error "-n $num_nodes is invalid"
+	exit 1
 fi
 
 if ((num_nodes > $NUM_ASSIGNED_NODES)) && [ -z "$force" ]; then
