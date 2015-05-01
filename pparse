@@ -1,0 +1,127 @@
+#!/bin/bash
+#
+# pparse [-L] [-x <var1 var2 ... > ] <log1 log2 ...>
+#
+# parse the very verbose output of PNCG logs to get timing info.
+#
+# The logs should be in the format:
+# timestamp: label: var: var_name: ...
+# 001010101: PNCG: var: x: ...
+#
+# This script will grep the log for "var: _____" for each -x <varname>
+# The time taken to compute -x <var> is found from the difference in timestamp
+# between its line and the line immediately before it; hence the output must be
+# written in the Spark code in a way that materializes RDDs correctly to
+# isolate a given RDD.
+#
+# Example: to print differential, use something like this in Spark code:
+# 	logStdout(s"$time: var: $othervar");
+# 	val zygote: RDD[A] = ovum.join(sperm).replicate(32)
+# 	logStdout(s"$time: var: $(zygote.count)");
+#
+# =================================================
+# Author: Michael B Hynes, mbhynes@uwaterloo.ca
+# License: GPL 3
+# Creation Date: Thu 30 Apr 2015 10:46:54 AM EDT
+# Last Modified: Thu 30 Apr 2015 01:48:03 PM EDT
+# =================================================
+. spark_vars
+
+function mfile_extract_avg() {
+	cat <<-eof
+	t = dlmread(stdin);
+	delta_t = diff(t)/1000;
+	vals = delta_t(1:2:end);
+	fprintf('%8.8f:%.8f\n', [mean(vals) std(vals)]);
+eof
+}
+
+function mfile_extract() {
+	cat <<-eof
+	t = dlmread(stdin);
+	delta_t = diff(t)/1000;
+	fprintf('%8.8f\n', delta_t(1:2:end)');
+eof
+}
+
+function clock_time() { #var name
+	var_name=$1
+	msg "extracting $var_name from $log"
+	if [ -n "$show_log" ]; then
+		grep -B 1 "var: $var_name" "$log" 
+	else
+		if [ -n "$average_values" ]; then
+			script=mfile_extract_avg
+		else
+			script=mfile_extract
+		fi
+		grep -B 1 "var: $var_name" "$log" \
+			| sed -r -e '/^--$/d; s/^([[:digit:]]+):.*/\1/' \
+			| octave -qf <($script)
+	fi
+}
+
+SCRIPT_NAME=$(basename $0)
+msg () {
+	echo "$SCRIPT_NAME: $@" 1>&2
+}
+warn () {
+	msg WARNING: $@
+}
+error () {
+	msg ERROR: $@
+}
+
+optstring="aLx:"
+while getopts "$optstring" opt; do
+	case "$opt" in
+		a)
+			average_values="true"
+			;;
+		L)
+			show_log="true" # for debugging, print filtered lines from log
+			;;
+		x)
+			read -a vars <<< "$OPTARG"
+			;;
+		:)
+			error "-$opt requires argument" 
+			;; 
+		?)
+			error invalid option
+			;; 
+	esac
+done
+shift $((OPTIND - 1))
+
+if (($# == 0)); then
+	disp_opts -h -n 15 $0 2>/dev/null
+fi
+
+for log in $@; do
+	if [ ! -f "$log" ]; then
+		log="$log/$SPARK_LOG_STDOUT"
+		if [ ! -f "$log" ]; then
+			warn "$log is not a valid file"
+			continue
+		fi
+	fi
+	for v in $vars; do
+		clock_time "$v"
+	done
+done
+
+# sep=":"
+# # regex defs
+# _s_='[[:space:]]*'
+# timestamp='^[[:digit:]]+'
+# old idea; didn't use this in the end---needlessly complicated.
+# f="$timestamp: linesearch: var: f0?:"
+# user_axpy="$timestamp: linesearch: var: [(user)(item)]_axpy:"
+# users="$timestamp: PNCG: var: [(user)(item)]s_axpy:"
+# users_pc="$timestamp: PNCG: var: [(user)(item)]s_pc:"
+# grad="$timestamp: PNCG: var: grad[(User)(Item)]:"
+# g="$timestamp: PNCG: var: g[ui]:"
+# gradTgrad="$timestamp: PNCG: var: gradTgrad:"
+# direc="$timestamp: PNCG: var: direc[(User)(Item)]:"
+# beta_pncg="$timestamp: PNCG: var: beta_pncg:"

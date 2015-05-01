@@ -8,7 +8,7 @@
 # Author: Michael B Hynes, mbhynes@uwaterloo.ca
 # License: GPL 3
 # Creation Date: Sat 11 Apr 2015 10:49:33 PM EDT
-# Last Modified: Sun 26 Apr 2015 10:28:31 AM EDT
+# Last Modified: Thu 30 Apr 2015 08:00:56 PM EDT
 # =================================================
 
 . spark_vars
@@ -20,7 +20,7 @@ FCOL_PNCG=7
 GCOL_PNCG=6
 FCOL_ALS=4
 GCOL_ALS=5
-REGEX='^[[:digit:]]+:[[:space:]]*[ALSPNCG]+:[[:space:]]*[[:digit:]]+:'
+REGEX='^[[:digit:]]+:[[:space:]]*[(ALS)(PNCG)]+:[[:space:]]*[[:digit:]]+:'
 delim=":"
 format="%10.8g$delim%10.8g\n"
 
@@ -81,9 +81,12 @@ if (($# == 0)); then
 	exit 0
 fi
 
-optstring="evT0d:fgtak"
+optstring="hevT0d:fgtakV:"
 while getopts "$optstring" opt; do
 	case "$opt" in
+		h)
+			print_dirname_header="true"
+			;;
 		e)
 			print_exit_status="true"
 			;;
@@ -114,11 +117,16 @@ while getopts "$optstring" opt; do
 		k)
 			gen_iter_metrics="true"
 			;;
+		V)
+			vartimes_dir="$OPTARG"
+			;;
 		:)
 			error "-$opt requires argument" 
+			exit 1
 			;; 
 		?)
 			error invalid option
+			exit 1
 			;; 
 	esac
 done
@@ -174,11 +182,32 @@ for logfile in $@; do
 		msg "Computing the time duration per iteration from $logfile"
 		if [ -n "$print_avg_iter_time" ]; then
 			# print_time_per_iteration | meanstd -d 1 -s -c 2 
+			if [ -n "$print_dirname_header" ]; then
+				echo -n "$logdir$delim"
+			fi
 			print_time_per_iteration \
 				| meanstd -d 1 -s -c 2 -f "'$format'" 2>/dev/null
 		else
 			print_time_per_iteration
 		fi
+	fi
+
+	# check if vartimes_dir was given; if so, generate metrics
+	if [ -n "$vartimes_dir" ]; then
+		if grep -q -m 1 ALS "$logfile"; then
+			vars="userFactors itemFactors"
+		else
+			vars="users_axpy items_axpy users_pc items_pc gradUser gradItem direcUser direcItem gu gi f user_axpy item_axpy gradTgrad beta_pncg gTp"
+		fi
+		mkdir -p "$vartimes_dir"
+		for v in $vars; do 
+			if [ -n "$verbose_flag" ]; then
+				pparse -L -x "$v" "$logfile" > "$vartimes_dir/$v"
+			else
+				pparse -x "$v" "$logfile" > "$vartimes_dir/$v"
+				pparse -a -x "$v" "$logfile" > "$vartimes_dir/$v.avg"
+			fi
+		done
 	fi
 
 	if [ -n "$print_f" ]; then
