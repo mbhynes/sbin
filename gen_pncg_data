@@ -8,7 +8,7 @@
 # Author: Michael B Hynes, mbhynes@uwaterloo.ca
 # License: GPL 3
 # Creation Date: Sat 11 Apr 2015 10:49:33 PM EDT
-# Last Modified: Thu 30 Apr 2015 08:00:56 PM EDT
+# Last Modified: Sat 02 May 2015 11:09:55 PM EDT
 # =================================================
 
 . spark_vars
@@ -81,7 +81,7 @@ if (($# == 0)); then
 	exit 0
 fi
 
-optstring="hevT0d:fgtakV:"
+optstring="LhevT0d:fgtakV:"
 while getopts "$optstring" opt; do
 	case "$opt" in
 		h)
@@ -98,6 +98,9 @@ while getopts "$optstring" opt; do
 			;;
 		d)
 			output_dir_flag="-d $OPTARG" 	# for spark_read_iters -d <output_dir>
+			;;
+		L)
+			print_linesearch_calls="true"
 			;;
 		f)
 			print_f="true"
@@ -225,6 +228,14 @@ for logfile in $@; do
 			print_values $GCOL_ALS
 		else
 			print_values $GCOL_PNCG
+		fi
+	fi
+
+	if [ -n "$print_linesearch_calls" ]; then
+		if ! is_als_log; then
+			msg "Printing ls calls from $logfile"
+			grep -E 'linesearch:[[:digit:]]+' "$logfile" \
+				| cut -d: -f3
 		fi
 	fi
 

@@ -17,7 +17,7 @@
 # Author: Michael B Hynes, mbhynes@uwaterloo.ca
 # License: GPL 3
 # Creation Date: Tue 17 Feb 2015 10:45:57 PM EST
-# Last Modified: Sat 11 Apr 2015 12:06:48 AM EDT
+# Last Modified: Tue 28 Apr 2015 05:12:27 PM EDT
 # =================================================
 
 SLAVE_MEM_ARG=""
@@ -54,10 +54,11 @@ while getopts $GETOPT_STRING opt; do
 	case $opt in
 		c)
 			num_cores="$OPTARG"
-			msg "Running with $num_cores local executors"
+			msg "Running with $num_cores cores"
 			;;
 		v)
 			VERBOSE="true"
+			msg "verbose mode enabled"
 			;;
 		M)
 			MEMORY="$OPTARG"
@@ -98,6 +99,7 @@ JAR=$1
 
 if [ -z "$num_cores" ]; then
 	num_cores='*'
+	msg "Running with local[$num_cores] local executors"
 fi
 
 if [ -z "$JAR" ] || [ ! -f "$JAR" ]; then

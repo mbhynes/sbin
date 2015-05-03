@@ -1,0 +1,164 @@
+#!/bin/bash
+#
+# gen_var_time -x [var1 var2 ...] [dir1 dir2 ...]
+#
+# plot the time required to compute the given variables
+# in each of the given directories' stdout logs
+#
+# The x axis will be scaled according to the number of processing
+# elements.
+#
+# =================================================
+# Author: Michael B Hynes, mbhynes@uwaterloo.ca
+# License: GPL 3
+# Creation Date: Fri 01 May 2015 08:55:54 AM EDT
+# Last Modified: Sat 02 May 2015 11:49:11 PM EDT
+# =================================================
+
+. spark_vars
+
+sep=:
+prefix=v
+output_directory="$PWD/vars"
+
+SCRIPT_NAME=$(basename $0)
+msg () {
+	echo "$SCRIPT_NAME: $@" 1>&2
+}
+warn () {
+	msg WARNING: $@
+}
+error () {
+	msg ERROR: $@
+}
+
+print_ordinate() {
+	prefix="$1"
+	sed -r -e "s/.*_$prefix([[:digit:]]+)_.*/\1/g"
+}
+
+print_num_nodes() {
+	sed -e 's/.*_v([[:digit:]]+)_.*/\1/g'
+}
+
+print_num_partitions() {
+	sed -e 's/.*_N([[:digit:]]+)_.*/\1/g'
+}
+
+optstring="SPs:d:p:Lx:"
+while getopts "$optstring" opt; do
+	case "$opt" in
+		S)
+			separate_plots="true"
+			make_plots="true"
+			;;
+		P)
+			make_plots="true"
+			;;
+		s)
+			sep="$OPTARG"
+			;;
+		d)
+			output_directory="$OPTARG"
+			;;
+		p)
+			prefix="$OPTARG" # to search in dirname
+			;;
+		L)
+			debug_flag="-L"
+			;;
+		x)
+			varnames="$OPTARG"
+			;;
+		:)
+			error "-$opt requires argument" 
+			exit 1
+			;; 
+		?)
+			error invalid option
+	exit 1
+			;; 
+	esac
+done
+shift $((OPTIND - 1))
+
+if (($# == 0)); then
+	disp_opts  -h -n 20 $0 2>/dev/null
+	exit 1
+fi
+
+k=1
+
+for logfile in $@; do
+
+	if [ ! -f "$logfile" ]; then
+		# try "$logfile/spark_stdout"
+		logfile="$logfile/$SPARK_LOG_STDOUT"
+		if [ ! -f "$logfile" ]; then
+			warn "$logfile" is not a readable file.
+			continue
+		fi
+	fi
+
+	logdir=$(dirname $logfile)
+
+	# set default varnames if not specified
+	if [ -z "$varnames" ]; then
+		if grep -q -m 1 ALS "$logfile"; then
+			varnames="userFactors itemFactors"
+		else
+			varnames="users_axpy items_axpy users_pc items_pc gradUser gradItem direcUser direcItem gu gi f user_axpy item_axpy gradTgrad beta_pncg gTp"
+		fi
+	fi
+
+	mkdir -p "$output_directory"
+
+	if ((k==1)); then
+		for v in $varnames; do
+			fout="$output_directory/$v"
+			if [ -f "$fout" ]; then
+				rm "$fout"
+			fi
+		done
+	fi
+
+	xval=$(print_ordinate "$prefix" <<<"$logdir")
+
+	for v in $varnames; do 
+		fout="$output_directory/$v"
+
+		if [ -n "$debug_flag" ]; then
+			cat >> "$fout" <<-eof 
+			$logdir$sep$xval 
+			$(pparse -L -x "$v" "$logfile") 
+eof
+		else
+			# pparse -x "$v" "$logfile" > "$vartimes_dir/$v"
+			echo "$xval$sep$(pparse -a -x "$v" "$logfile")" >> "$fout"
+			# pparse -d "$sep" -a -x "$v" "$logfile" > "$output_directory/$v"
+		fi
+
+	done
+
+	((k++))
+
+done
+
+if [ -n "$make_plots" ]; then
+	if [ -n "$separate_plots" ]; then
+		for v in $varnames; do
+			fin="$output_directory/$v"
+			fout="$output_directory/$v.eps"
+			gplot -P "bmargin horizontal" -l -e -d "$sep" -x "$prefix" -y "Time per iteration (s)" -L "$v" -o "$fout" "$fin" >/dev/null
+		done
+	else
+		files=""
+		legend=""
+		for v in $varnames; do
+			files="$files $output_directory/$v"
+			legend="$legend $v"
+		done
+		fout="$output_directory/o.eps"
+		gplot -P "bmargin horizontal" -l -e -d "$sep" -x "$prefix" -y "Time per iteration (s)" -L "$legend" -o "$fout" $files 1>&2 
+	fi
+fi

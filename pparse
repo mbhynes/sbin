@@ -27,12 +27,14 @@
 # =================================================
 . spark_vars
 
+delim=:
+
 function mfile_extract_avg() {
 	cat <<-eof
 	t = dlmread(stdin);
 	delta_t = diff(t)/1000;
 	vals = delta_t(1:2:end);
-	fprintf('%8.8f:%.8f\n', [mean(vals) std(vals)]);
+	fprintf('%8.8f$delim%.8f\n', [mean(vals) std(vals)]);
 eof
 }
 
@@ -72,9 +74,12 @@ error () {
 	msg ERROR: $@
 }
 
-optstring="aLx:"
+optstring="d:aLx:"
 while getopts "$optstring" opt; do
 	case "$opt" in
+		d)
+			delim="$OPTARG"
+			;;
 		a)
 			average_values="true"
 			;;
