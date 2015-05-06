@@ -12,7 +12,7 @@
 # Author: Michael B Hynes, mbhynes@uwaterloo.ca
 # License: GPL 3
 # Creation Date: Fri 01 May 2015 08:55:54 AM EDT
-# Last Modified: Tue 05 May 2015 08:03:05 PM EDT
+# Last Modified: Tue 05 May 2015 09:08:18 PM EDT
 # =================================================
 
 . spark_vars
@@ -45,9 +45,12 @@ print_num_partitions() {
 	sed -e 's/.*_N([[:digit:]]+)_.*/\1/g'
 }
 
-optstring="SPs:d:p:Lx:"
+optstring="oSPs:d:p:Lx:"
 while getopts "$optstring" opt; do
 	case "$opt" in
+		o)
+			print_to_stdout="true"
+			;;
 		S)
 			separate_plots="true"
 			make_plots="true"
@@ -139,6 +142,9 @@ eof
 		else
 			# pparse -x "$v" "$logfile" > "$vartimes_dir/$v"
 			echo "$xval$sep$(pparse -a -x "$v" "$logfile")" >> "$fout"
+			if [ -n "$print_to_stdout" ]; then
+				echo "$xval$sep$(pparse -a -x "$v" "$logfile")" 
+			fi
 			# pparse -d "$sep" -a -x "$v" "$logfile" > "$output_directory/$v"
 		fi
 
