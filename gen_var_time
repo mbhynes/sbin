@@ -12,7 +12,7 @@
 # Author: Michael B Hynes, mbhynes@uwaterloo.ca
 # License: GPL 3
 # Creation Date: Fri 01 May 2015 08:55:54 AM EDT
-# Last Modified: Sat 02 May 2015 11:49:11 PM EDT
+# Last Modified: Tue 05 May 2015 08:03:05 PM EDT
 # =================================================
 
 . spark_vars
@@ -107,7 +107,11 @@ for logfile in $@; do
 		if grep -q -m 1 ALS "$logfile"; then
 			varnames="userFactors itemFactors"
 		else
-			varnames="users_axpy items_axpy users_pc items_pc gradUser gradItem direcUser direcItem gu gi f user_axpy item_axpy gradTgrad beta_pncg gTp"
+			# old varnames
+			# varnames="users_axpy items_axpy users_pc items_pc gradUser gradItem direcUser direcItem gu gi f user_axpy item_axpy gradTgrad beta_pncg gTp"
+
+			# new varnames in modified code
+			varnames="users_axpy items_axpy users_pc items_pc gradUser gradItem direcUser direcItem gu gi f gradTgrad beta_pncg gTp costCoeffs"
 		fi
 	fi
 
