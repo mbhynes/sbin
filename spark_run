@@ -51,9 +51,12 @@ get_time() {
 }
 
 # parse commandline arguments
-GETOPT_STRING="vj:C:M:N:d:L"
+GETOPT_STRING="gvj:C:M:N:d:L"
 while getopts $GETOPT_STRING opt; do
 	case $opt in
+		g)
+			COMPILE_GANGLIA_METRICS=true
+			;;
 		M)
 			SLAVE_MEM="$OPTARG"
 			;;
@@ -183,10 +186,12 @@ echo $t_end >> $SPARK_LOG_TIME
 # save exit status to file in current dir
 echo $STATUS > "$SPARK_EXIT_STATUS"_"$STATUS"
 
-# compile ganglia metrics
-mkdir -p "$GANGLIA_DATA_DIR"
-cd "$GANGLIA_DATA_DIR"
-rrdcsv $GANGLIA_METRICS 1>$GANGLIA_NODE_ORDER 2>$GANGLIA_LOG_STDERR
-cd "$OLD_PWD"
+if [ -n "$COMPILE_GANGLIA_METRICS" ]; then
+	# compile ganglia metrics
+	mkdir -p "$GANGLIA_DATA_DIR"
+	cd "$GANGLIA_DATA_DIR"
+	rrdcsv $GANGLIA_METRICS 1>$GANGLIA_NODE_ORDER 2>$GANGLIA_LOG_STDERR
+	cd "$OLD_PWD"
+fi
 
 exit $STATUS

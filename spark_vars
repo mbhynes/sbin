@@ -37,7 +37,7 @@ export SPARK_RUN_DELAY=5
 
 # node parameters
 export SPARK_DRIVER_MEM="10G"
-export SPARK_MAX_MEM="80G"
+export SPARK_MAX_MEM="30G"
 export SPARK_DEPLOY_MODE="client"
 
 # event logging directories logging

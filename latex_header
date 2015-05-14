@@ -94,7 +94,9 @@ cat <<EOF
 % \\newpage
 EOF
 }
-
+title() {
+	echo "\\title{$@}"
+}
 #=====================================
 subsection() {
 	title=$(echo $1 | tr '_' ' ')
@@ -145,12 +147,28 @@ longtable() {
 	fi
 }
 
+insert_table() {
+	cat <<eof
+	\\begin{table}[htb!]
+	{
+		\\footnotesize
+		\\input{$1}
+	}
+		\\caption{$2}
+		\\label{tab:$(basename $1)}
+	\\end{table}
+eof
+}
 table() {
 	file=$1
 	if [ ! -r "$file" ]; then
 		return 1;
 	fi
-	caption=$(echo $2 | tr '_' ' ')
+	if (($# == 2)); then
+		caption=$(tr '_' ' ' <<<$2)
+	else
+		caption=$(tr '_' ' ' <<<$file)
+	fi
 	echo "\\TAB{$file}{$caption}"
 	if [ "$HAS_PLACEINS" ]
 	then
@@ -190,4 +208,17 @@ subcode() {
 			firstnumber=$line1]{$file}
 }
 EOF
+}
+
+bash_list() {
+	cat <<eof
+	\\begin{lstlisting}[language=bash,]
+	\\$ $@
+	\\end{lstlisting}
+eof
+}
+
+
+page_size() {
+	echo "\\newgeometry{left=$1 cm,right=$2 cm,top=$3 cm,bottom=$4 cm}"
 }

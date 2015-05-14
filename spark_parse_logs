@@ -17,6 +17,12 @@
 # Example -C TaskSetManager
 #	t,Stage#,Task#,TID,Duration,Host,Task#,TotalTasksInStage
 #
+# All currently available Classes are:
+#		DAGScheduler)
+#		TaskSetManager)
+#		ShuffleBlockFetcherIterator)
+#		BlockManagerInfo)
+#
 # time_elapsed can be either in seconds or milliseconds, depending on 
 # the format specified in $SPARK_HOME/conf/log4j.properties.
 # If the time format is in milliseconds, specify -M.

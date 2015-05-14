@@ -1,48 +1,84 @@
 #!/bin/bash
 #
-# Wed Nov 12 17:28:58 EST 2014
+# rrdcsv [-d output_dir] <metric1 metric2 ...>
 #
-# extract all of the gmetad information into readable text
-# this will run several background sed processes
+# Compile specified metrics, write them to files in <output_dir>,
+# which is by default the \$PWD.
+# 
+# To compile *all* metrics, run: 
+# rrdcsv all
+# 
+# Note: himrod ganglia files are storaged in:
+# /var/lib/ganglia/rrds/himrod/
 #
-# Mike Hynes
+# If you get any weirdness in this script, try looking at the output of:
+# rrdtool dump <file>
+#
+# =================================================
+# Author: Michael B Hynes, mbhynes@uwaterloo.ca
+# License: GPL 3
+# Creation Date: Wed Nov 12 17:28:58 EST 2014
+# Last Modified: Thu 14 May 2015 06:26:11 PM EDT
+# =================================================
 
 . spark_vars
 
-function dump()
-{
+# set default output directory
+output_directory="$PWD"
 
+SCRIPT_NAME=$(basename $0)
+msg () {
+	echo "$SCRIPT_NAME: $@" 1>&2
+}
+warn () {
+	msg WARNING: $@
+}
+error () {
+	msg ERROR: $@
+}
+
+optstring="d:"
+while getopts "$optstring" opt; do
+	case "$opt" in
+		d)
+			output_directory="$OPTARG"
+			;;
+		:)
+			error "-$opt requires argument" 
+			;; 
+		?)
+			error invalid option
+			;; 
+	esac
+done
+shift $((OPTIND - 1))
+
+function dump() {
 	DATE="[[:digit:] -:EST]+"
 	BLANK="[[:space:]]*"
 	START="<!--"
-
 	FORMAT=".*\/ ([[:digit:]]+) --> <row><v>([[:digit:]\.e+-]+)<\/v><\/row>"
-
 	while (( $# > 0))
 	do
-		# rrdtool dump $1 | sed -e '1,38d' | sed -r -e "s/$FORMAT/\1 \2/" | sed -e "/[[:space:]]*<\/[[:alpha:]]*>/d"
 		rrdtool dump $1 | sed -r -e "1,38d; s/$FORMAT/\1$GANGLIA_DELIM\2/; /[[:space:]]*<\/[[:alpha:]]*>/d"
-		# rrdtool dump $1 | sed -r -e "1,38d; s/$FORMAT/\1$GANGLIA_DELIM\2/; /[[:space:]]*<\/[[:alpha:]]*>/d" | head -n 100 1>&2
-		# rrdtool dump $1 | head -n 20 1>&2
 		shift
 	done
 }
 
-function compile_metrics() 
-{
+function compile_metrics() {
 	m=$1
 	shift
  	DIRS=$@
 
-	fout=$(basename $m .rrd)
+	fout="$output_directory/$(basename $m .rrd)"
+	msg "fout=$fout"
 
 	FIRST=1
 	for d in $DIRS; do
-		if echo $d | grep -q $GANGLIA_EXCLUDE; then 
+		if grep -q $GANGLIA_EXCLUDE <<<"$d"; then 
 			continue
 		fi
 
-		# echo Compiling $d 1>&2
 		if ((FIRST)); then
 			if [ -f $d/$m ]; then
 				FIRST=0
@@ -63,8 +99,7 @@ function compile_metrics()
 					mv $tmpf $fout
 				else
 					echo ERROR: Could not join $d/$m  1>&2
-					echo ERROR: See the output of \$rrdtool dump $d/$m: 1>&2
-					# dump $d/$m | head -n 10  
+					echo ERROR: You should examine the output of \$rrdtool dump $d/$m: 1>&2
 					rm $tmpf
 				fi
 
@@ -78,17 +113,19 @@ function compile_metrics()
 if (( $# == 0))
 then
 	cat <<EOF
- usage: $0 [metric1 metric2 ...]
+ usage: $(basename $0) -d <output_dir> [metric1 metric2 ...]
 
- compile specified metrics, write them to files in the PWD
+ Compile specified metrics, write them to files in <output_dir>,
+ which is by default the \$PWD.
 
- to compile *all* metrics, run: 
- $0 all
+ To compile *all* metrics, run: 
+ $(basename $0) all
 
- note: himrod files are storaged in:
+ Note: himrod ganglia files are storaged in:
  /var/lib/ganglia/rrds/himrod/
 
- errors are reported to stderr
+ If you get any weirdness in this script, try looking at the output of:
+ rrdtool dump <file>
 EOF
 	exit
 fi
@@ -110,15 +147,14 @@ fi
 for d in $DIRS
 do
 	unit=$(basename $d) 
-
 	if [[ "$unit" == "$GANGLIA_EXCLUDE" ]]
 	then 
 		continue
 	fi
-
 	echo -n "$unit " 
 done
 
+mkdir -p "$output_directory"
 for m in $METRICS
 do
 	echo "Compiling metric: $m" 1>&2

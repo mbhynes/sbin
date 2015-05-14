@@ -8,7 +8,7 @@
 # Author: Michael B Hynes, mbhynes@uwaterloo.ca
 # License: GPL 3
 # Creation Date: Sat 11 Apr 2015 10:49:33 PM EDT
-# Last Modified: Sat 02 May 2015 11:09:55 PM EDT
+# Last Modified: Tue 05 May 2015 09:26:39 PM EDT
 # =================================================
 
 . spark_vars
@@ -234,7 +234,7 @@ for logfile in $@; do
 	if [ -n "$print_linesearch_calls" ]; then
 		if ! is_als_log; then
 			msg "Printing ls calls from $logfile"
-			grep -E 'linesearch:[[:digit:]]+' "$logfile" \
+			grep -E 'linesearch:[[:space:]]*[[:digit:]]+' "$logfile" \
 				| cut -d: -f3
 		fi
 	fi
