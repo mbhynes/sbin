@@ -24,7 +24,7 @@
 
 begin_document() {
 cat <<EOF
-\\documentclass[12pt]{article}
+\\documentclass[10pt]{article}
 \\usepackage{listings}
 \\usepackage{graphicx}
 \\usepackage{hyperref}
@@ -43,7 +43,6 @@ cat <<EOF
     commentstyle=\\color{Purple},
     stringstyle=\\color{Red},
     keywordstyle=\\color{Green}\\bfseries,
-		numbers=left
 }
 
 \\date{$(date)}
@@ -150,10 +149,18 @@ longtable() {
 insert_table() {
 	cat <<eof
 	\\begin{table}[htb!]
+	\\begin{center}
 	{
-		\\footnotesize
-		\\input{$1}
+		\\small
+eof
+if [ -r "$1.tex" ]; then
+	cat	"$1.tex"
+elif [ -f "$1" ]; then
+	cat	"$1"
+fi
+cat <<eof
 	}
+	\\end{center}
 		\\caption{$2}
 		\\label{tab:$(basename $1)}
 	\\end{table}
@@ -212,8 +219,8 @@ EOF
 
 bash_list() {
 	cat <<eof
-	\\begin{lstlisting}[language=bash,]
-	\\$ $@
+	\\begin{lstlisting}[language=bash]
+	# $@
 	\\end{lstlisting}
 eof
 }
