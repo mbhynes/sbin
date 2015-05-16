@@ -1,6 +1,15 @@
 #!/bin/bash
-# rrd_filter_time t0 t1 file file file ..
-# output values from rrdcsv files only within [t0,t1]
+#
+# rrd_filter_time -1 t1 -2 t1 [file1 file2 file3 ..]
+#
+# Print values from rrdcsv files that have time values within [t1,t2]
+#
+# =================================================
+# Author: Michael B Hynes, mbhynes@uwaterloo.ca
+# License: GPL 3
+# Creation Date: Fri 15 May 2015 04:17:43 PM EDT
+# Last Modified: Fri 15 May 2015 04:18:56 PM EDT
+# =================================================
 
 get_line_num() 
 {
@@ -22,8 +31,7 @@ cat_sub() # $n1 $n2 $file
 
 if (($# == 0))
 then
-	echo usage: "$0 -1 t1 -2 t2 file file file .."
-	disp_opts -h "$0"
+	disp_opts -n 10 -h "$0"
 	exit
 fi
 

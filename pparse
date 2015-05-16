@@ -115,18 +115,3 @@ for log in $@; do
 		clock_time "$v"
 	done
 done
-
-# sep=":"
-# # regex defs
-# _s_='[[:space:]]*'
-# timestamp='^[[:digit:]]+'
-# old idea; didn't use this in the end---needlessly complicated.
-# f="$timestamp: linesearch: var: f0?:"
-# user_axpy="$timestamp: linesearch: var: [(user)(item)]_axpy:"
-# users="$timestamp: PNCG: var: [(user)(item)]s_axpy:"
-# users_pc="$timestamp: PNCG: var: [(user)(item)]s_pc:"
-# grad="$timestamp: PNCG: var: grad[(User)(Item)]:"
-# g="$timestamp: PNCG: var: g[ui]:"
-# gradTgrad="$timestamp: PNCG: var: gradTgrad:"
-# direc="$timestamp: PNCG: var: direc[(User)(Item)]:"
-# beta_pncg="$timestamp: PNCG: var: beta_pncg:"

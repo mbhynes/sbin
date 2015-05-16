@@ -5,11 +5,14 @@
 # Make symlinks in the ~/spark/conf to the
 # configuration files specified in -d sparkConfDir, if they exist.
 #
+# The files must be identically named for the symlink to
+# be created.
+#
 # =================================================
 # Author: Michael B Hynes, mbhynes@uwaterloo.ca
 # License: GPL 3
 # Creation Date: Sun 15 Feb 2015 03:11:16 PM EST
-# Last Modified: Fri 27 Feb 2015 08:40:20 AM EST
+# Last Modified: Fri 15 May 2015 06:21:18 PM EDT
 # =================================================
 
 srcdir=""

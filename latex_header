@@ -85,6 +85,7 @@ cat <<EOF
 \\newcommand{\\eqn}[1]{Eq.~(\\ref{#1})}
 \\newcommand{\\fig}[1]{Fig.~\\ref{fig:#1}}
 \\newcommand{\\tab}[1]{Tab.~\\ref{tab:#1}}
+\\newcommand{\\secref}[1]{Section~\\ref{sec:#1}}
 
 \\begin{document}
 %\\twocolumn
@@ -98,14 +99,19 @@ title() {
 }
 #=====================================
 subsection() {
-	title=$(echo $1 | tr '_' ' ')
+	title=$(sed -e "s/_/-/g" <<<$@)
 	echo "\\subsection{$title}"
+
+	label=$(tr 'A-Z ' 'a-z_' <<<$title)
+	echo "\\label{sec:$label}"
 }
 
 #=====================================
 section() {
-	title=$(echo $1 | tr '_' ' ')
+	title=$(sed -e 's/_/-/g' <<<$@)
 	echo "\\section{$title}"
+	label=$(tr 'A-Z ' 'a-z_' <<<$title)
+	echo "\\label{sec:$label}"
 }
 
 newpage() {
