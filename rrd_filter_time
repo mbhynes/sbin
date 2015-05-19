@@ -1,14 +1,17 @@
 #!/bin/bash
 #
-# rrd_filter_time -1 t1 -2 t1 [file1 file2 file3 ..]
+# rrd_filter_time [-f time_file] -1 t1 -2 t1 <file1 file2 file3 ...>
 #
 # Print values from rrdcsv files that have time values within [t1,t2]
+#
+# Alternatively, specifying -f <time_file> will read t1,t2 from time_file,
+# which contains t1,t2 in unix epoch seconds, separated by a newline.
 #
 # =================================================
 # Author: Michael B Hynes, mbhynes@uwaterloo.ca
 # License: GPL 3
 # Creation Date: Fri 15 May 2015 04:17:43 PM EDT
-# Last Modified: Fri 15 May 2015 04:18:56 PM EDT
+# Last Modified: Tue 19 May 2015 12:41:17 AM EDT
 # =================================================
 
 get_line_num() 

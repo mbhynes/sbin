@@ -22,7 +22,7 @@
 # Last Modified: Tue 17 Feb 2015 04:12:14 PM EST
 # =================================================
 
-begin_document() {
+preamble() {
 cat <<EOF
 \\documentclass[10pt]{article}
 \\usepackage{listings}
@@ -48,6 +48,17 @@ cat <<EOF
 \\date{$(date)}
 \\author{$USER@$HOSTNAME}
 \\newgeometry{left=1in,right=1in,top=0.5cm,bottom=0.5cm}
+
+\\newcommand{\\EPSFIG}[3]{
+	\\begin{figure}[htb!]
+		\\centering
+		\\resizebox{#2\\columnwidth}{!}{
+			\\input{fig/#1}
+		}
+		\\caption{#3}
+		\\label{fig:#1}
+	\\end{figure}
+}
 
 \\newcommand{\\FIG}[3]{
 	\\begin{figure}[htb!]
@@ -86,7 +97,11 @@ cat <<EOF
 \\newcommand{\\fig}[1]{Fig.~\\ref{fig:#1}}
 \\newcommand{\\tab}[1]{Tab.~\\ref{tab:#1}}
 \\newcommand{\\secref}[1]{Section~\\ref{sec:#1}}
+EOF
+}
 
+begin_document() {
+	cat <<EOF
 \\begin{document}
 %\\twocolumn
 % \\maketitle
@@ -94,6 +109,7 @@ cat <<EOF
 % \\newpage
 EOF
 }
+
 title() {
 	echo "\\title{$@}"
 }
@@ -128,6 +144,7 @@ end_document() {
 EOF
 }
 
+
 figure() {
 	file=$1
 	if [ ! -r "$file" ]; then
@@ -156,8 +173,10 @@ insert_table() {
 	cat <<eof
 	\\begin{table}[htb!]
 	\\begin{center}
+	\\caption{$2}
+	\\label{tab:$(basename $1)}
 	{
-		\\small
+		\\scriptsize
 eof
 if [ -r "$1.tex" ]; then
 	cat	"$1.tex"
@@ -167,8 +186,6 @@ fi
 cat <<eof
 	}
 	\\end{center}
-		\\caption{$2}
-		\\label{tab:$(basename $1)}
 	\\end{table}
 eof
 }

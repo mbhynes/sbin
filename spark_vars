@@ -1,7 +1,9 @@
 #===================================
-#!/usr/bin/bash
-#===================================
-# Set spark defaults and env variables
+#!/bin/bash
+#
+# spark_vars
+#
+# Set spark defaults and env variables.
 # 
 # This script is loaded by spark-related
 # scripts, and contains all global defs
