@@ -71,12 +71,13 @@ cat <<EOF
 
 \\newcommand{\\TAB}[2]{
 	\\begin{table}[htb!]
+	\\caption{#2}
+	\\label{tab:#1}
+	\\centering
 	{
 		\\footnotesize
 		\\input{#1}
 	}
-		\\caption{#2}
-		\\label{tab:#1}
 	\\end{table}
 }
 
