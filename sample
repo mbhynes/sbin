@@ -7,7 +7,7 @@
 # Author: Michael B Hynes, mbhynes@uwaterloo.ca
 # License: GPL 3
 # Creation Date: Wed 22 Apr 2015 05:14:39 PM EDT
-# Last Modified: Fri 24 Apr 2015 10:25:58 AM EDT
+# Last Modified: Wed 08 Jul 2015 08:10:40 PM EDT
 # =================================================
 
 . spark_vars
@@ -34,9 +34,12 @@ error () {
 }
 
 
-optstring="p:n:o:c:"
+optstring="m:p:n:o:c:"
 while getopts "$optstring" opt; do
 	case "$opt" in
+		m)
+			spark_master_url="$OPTARG"
+			;;
 		p)
 			partitions_per_core="$OPTARG"
 			;;
@@ -91,7 +94,8 @@ fi
 if [ -d "$fout.dir" ]; then
 	rm -r "$fout.dir"
 fi
-spark_run \
+spark-run \
+	-m "$spark_master_url" \
 	-d "$(newdir -t '%Y-%m-%d-' sample-)" \
 	-C $class \
 	-N "Sampling-$fin" \

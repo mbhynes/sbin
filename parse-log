@@ -1,0 +1,161 @@
+#!/bin/bash
+#
+# parse-log [ -d <delim> ] [ -n <num_lines> ] -e <event> [log1 log2 ... ]
+#
+# Parse the spark event logs for numerical information about
+# stages and tasks, outputting them in a CSV format for analysis
+#
+# TODO: replace sed with a python script that reads JSON
+#
+# =================================================
+# Author: Michael B Hynes, mbhynes@uwaterloo.ca
+# License: GPL 3
+# Creation Date: Wed 08 Jul 2015 09:00:31 AM EDT
+# Last Modified: Sat 25 Jul 2015 05:34:07 PM EDT
+# =================================================
+
+# set default delimiter 
+_delim=,
+
+SCRIPT_NAME=$(basename $0)
+msg () {
+	echo "$SCRIPT_NAME: $@" 1>&2
+}
+warn () {
+	msg WARNING: $@
+}
+error () {
+	msg ERROR: $@
+}
+
+make_keys() {
+	# generate a list of keys with IFS=:
+	case $1 in
+		task)
+			keys='"Stage ID"
+"Task ID"
+"Launch Time"
+"Executor ID"
+"Getting Result Time"
+"Finish Time"
+"Executor Deserialize Time"
+"Executor Run Time"
+"Result Size"
+"JVM GC Time"
+"Result Serialization Time"
+"Memory Bytes Spilled"
+"Disk Bytes Spilled"
+'
+			;;
+		stage)
+				keys='"Stage ID"
+"Stage Name"
+"Number of Tasks"
+"Submission Time"
+"Completion Time"'
+			;;
+	esac
+	IFS=$'\n'
+	for k in $keys; do
+		printf "%s:" $k
+	done
+}
+
+parse_script () {
+	# Create a dynamic sed script to match each key and return 
+	# the key's value, with $_delim as the separator 
+	# 
+	# Note that we use '@' as a placeholder for the previously matched
+	# lines. This is because sed can only handle 9 patterns in memory
+
+	# IFS=$'\n'
+	IFS=$':'
+	_fill='.*'
+	_other='(.*)'
+	_value='"?([-.:_ [:alnum:]]+)"?}?'
+	i=1
+	keys=$@
+	for _key in $keys; do
+		if ((i == 1)); then
+			regexp="$_fill$_key:$_value,$_other"
+			replacement='\1@\2'
+		else
+			regexp="$_other@$_fill$_key:$_value,$_other"
+			replacement="\\1$_delim\\2@\\3"
+		fi
+		echo "s/$regexp/$replacement/"
+		((i++))
+	done 
+	# remove trailing characters 
+	echo "s/(.*)@.*/\1/"
+}
+
+optstring="n:d:e:"
+while getopts "$optstring" opt; do
+	case "$opt" in
+		n)
+			nlines="-m $OPTARG"
+			;;
+		e)
+			event="$OPTARG"
+			;;
+		d)
+			_delim="$OPTARG"
+			;;
+		:)
+			error "-$opt requires argument" 
+			;; 
+		?)
+			error invalid option
+			;; 
+	esac
+done
+shift $((OPTIND - 1))
+
+
+if [ -z "$event" ] || (($# == 0)); then
+	if which disp_opts >/dev/null; then
+		disp_opts -h -n 10 $0 2>/dev/null;
+	else
+		head -n 14 $0
+	fi
+
+	printf "\nThe order of keys for stages is:\n"
+	make_keys stage | tr : '\n' | nl
+	printf "\nThe order of keys for tasks is:\n"
+	make_keys task | tr : '\n' | nl
+	exit 0
+fi
+
+case $event in
+	task)
+		# script=parse_task_script
+		match_lines=SparkListenerTaskEnd
+		;;
+	stage)
+		match_lines=SparkListenerStageCompleted
+		;;
+	*)
+		error "Invalid event type: $event"
+		disp_opts -h -n 20 $0 2>/dev/null;
+		exit 1
+		;;
+esac
+
+keys=$(make_keys $event)
+
+# generate the sed script on the fly and parse the logs
+for log in $@; do
+	# ensure that the lines can be matched
+	if ! grep -q -m 1 $match_lines "$log"; then
+		error "Could not match $match_lines in $log"
+		continue
+	fi
+	msg "Parsing $log ... (this can take a while)"
+	grep $nlines $match_lines "$log" \
+		| sed -r -f <(parse_script $keys)
+done
+
+#Contents of two example lines of TaskEnds in the event logs:
+# {"Event":"SparkListenerTaskEnd","Stage ID":19,"Stage Attempt ID":0,"Task Type":"ShuffleMapTask","Task End Reason":{"Reason":"Success"},"Task Info":{"Task ID":905,"Index":87,"Attempt":0,"Launch Time":1431530769052,"Executor ID":"3","Host":"himrod-17","Locality":"PROCESS_LOCAL","Speculative":false,"Getting Result Time":0,"Finish Time":1431530769316,"Failed":false,"Accumulables":[]},"Task Metrics":{"Host Name":"himrod-17","Executor Deserialize Time":1,"Executor Run Time":243,"Result Size":2091,"JVM GC Time":0,"Result Serialization Time":0,"Memory Bytes Spilled":0,"Disk Bytes Spilled":0,"Shuffle Write Metrics":{"Shuffle Bytes Written":2182414,"Shuffle Write Time":74828088,"Shuffle Records Written":1},"Input Metrics":{"Data Read Method":"Memory","Bytes Read":2291608,"Records Read":1}}}
+# {"Event":"SparkListenerTaskEnd","Stage ID":22,"Stage Attempt ID":0,"Task Type":"ResultTask","Task End Reason":{"Reason":"Success"},"Task Info":{"Task ID":1146,"Index":36,"Attempt":0,"Launch Time":1431530779482,"Executor ID":"2","Host":"himrod-8","Locality":"PROCESS_LOCAL","Speculative":false,"Getting Result Time":0,"Finish Time":1431530782513,"Failed":false,"Accumulables":[]},"Task Metrics":{"Host Name":"himrod-8","Executor Deserialize Time":2,"Executor Run Time":2960,"Result Size":2614,"JVM GC Time":0,"Result Serialization Time":0,"Memory Bytes Spilled":0,"Disk Bytes Spilled":0,"Shuffle Read Metrics":{"Remote Blocks Fetched":80,"Local Blocks Fetched":16,"Fetch Wait Time":1,"Remote Bytes Read":2888105,"Local Bytes Read":578600,"Total Records Read":96},"Input Metrics":{"Data Read Method":"Memory","Bytes Read":11918152,"Records Read":1},"Updated Blocks":[{"Block ID":"rdd_41_36","Status":{"Storage Level":{"Use Disk":false,"Use Memory":true,"Use Tachyon":false,"Deserialized":true,"Replication":1},"Memory Size":2291832,"Tachyon Size":0,"Disk Size":0}}]}}

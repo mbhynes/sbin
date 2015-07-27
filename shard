@@ -1,0 +1,166 @@
+#!/bin/bash
+#
+# Invocation:
+# shard [-a -s] -m <master> -p <port> -w <webui_port> [slave1 slave2]
+# shard [-a -s] -m <master> -p <port> -w <webui_port> -N <num_slaves>
+# 
+# Create a Spark cluster composed of the specified master
+# and slaves with specified ports.
+#
+# Optionally stop those slaves/master with the -s flag.
+#
+# The master may be instantiated/killed on a remote node.
+# As usual, password-less ssh is required on all nodes.
+#
+# =================================================
+# Author: Michael B Hynes, mbhynes@uwaterloo.ca
+# License: GPL 3
+# Creation Date: Tue 19 May 2015 04:46:57 PM EDT
+# Last Modified: Thu 23 Jul 2015 12:15:37 PM EDT
+# =================================================
+
+MASTER_CLASS=org.apache.spark.deploy.master.Master
+WORKER_CLASS=org.apache.spark.deploy.worker.Worker
+SPARK_DAEMON=spark-daemon.sh
+master=""
+port=""
+webui_port="8080"
+cmd="start"
+
+SCRIPT_NAME=$(basename $0)
+msg () {
+	echo "$SCRIPT_NAME: $@" 1>&2
+}
+warn () {
+	msg WARNING: $@
+}
+error () {
+	msg ERROR: $@
+}
+print_all_slaves() {
+	printf "himrod-%d\n" {1..9} {16..23}
+}
+run_master() {
+	num_errors=0
+	# Run $cmd on $master
+	if [[ "$HOSTNAME" == "$master" ]]; then
+		$SPARK_DAEMON $cmd $MASTER_CLASS 1 \
+				--ip $master \
+				--port $port \
+				--webui-port $webui_port
+		return 0
+	fi
+
+	if ping -c 1 "$master" >/dev/null; then
+		ssh -q -t $master 2>&1 <<eof
+			$SPARK_DAEMON $cmd $MASTER_CLASS 1 \
+					--ip $master \
+					--port $port \
+					--webui-port $webui_port
+eof
+	else
+		error "$master is unreachable" 
+		((num_errors++))
+	fi
+	return $num_errors
+}
+run_slaves() {
+	num_errors=0
+	slaves=$@
+	for slave in $slaves; do
+		msg "Running $SPARK_DAEMON <$cmd> $WORKER_CLASS on $slave"
+		if [[ "$HOSTNAME" == "$slave" ]]; then
+			$SPARK_DAEMON $cmd $WORKER_CLASS 1 "spark://$master:$port"
+			continue
+		fi
+		if	ping -c 1 "$slave" >/dev/null; then
+			ssh -q -t $slave 2>&1 <<eof
+				$SPARK_DAEMON $cmd $WORKER_CLASS 1 "spark://$master:$port"
+eof
+			slave_status=$?
+			if [ "$slave_status" -gt 0 ]; then
+				error "Could not $cmd Worker on $slave"
+				((num_errors++))
+			fi
+		else
+			error "$slave is unreachable"
+			((status++))
+		fi
+	done
+	return $num_errors
+}
+
+optstring="asm:p:w:N:"
+while getopts "$optstring" opt; do
+	case "$opt" in
+		N)
+			num_slaves="$OPTARG"
+			;;
+		a)
+			append_slaves="true" #only start/stop slaves, not master
+			;;
+		s)
+			cmd="stop"
+			;;
+		m)
+			master="$OPTARG"
+			;;
+		p)
+			port="$OPTARG"
+			;;
+		w)
+			webui_port="$OPTARG"
+			;;
+		:)
+			error "-$opt requires argument" 
+			;; 
+		?)
+			error invalid option
+			;; 
+	esac
+done
+shift $((OPTIND - 1))
+
+if [ -z "$master" ] && [ "$cmd" == start ]; then
+	error "-m <master> required."
+	disp_opts -h -n 10 $0 2>/dev/null
+	exit 1
+fi
+
+if [ -z "$port" ] && [ "$cmd" == start ]; then
+	error "-p <port> required."
+	disp_opts -h -n 10 $0 2>/dev/null
+	exit 1
+fi
+
+if (($# == 0)); then
+	warn "No slaves specified."
+fi
+if [ -n "$num_slaves" ]; then
+	warn "Starting up $num_slaves slaves, from [1...23], minus [10...15]"
+	slaves=$(print_all_slaves | head -n $num_slaves)
+	warn "Slaves are: $slaves"
+else
+	slaves="$@"
+fi
+
+if ! which "$SPARK_DAEMON"; then
+	error "$SPARK_DAEMON is not in the path. First add \$SPARK_HOME/sbin to the path."
+	exit 1
+fi
+
+if [[ "$cmd" == start ]]; then
+	if [ -z "$append_slaves" ]; then
+		run_master
+	fi
+	if [ $? -gt 0 ]; then
+		exit 1
+	fi
+	run_slaves $slaves
+else
+	run_slaves $slaves
+	# only stop master if -a flag is not specified
+	if [ -z "$append_slaves" ]; then
+		run_master
+	fi
+fi
