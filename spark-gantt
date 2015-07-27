@@ -1,0 +1,52 @@
+#!/bin/bash
+#
+# /home/mike/sbin/spark-gantt
+# =================================================
+# Author: Michael B Hynes, mbhynes@uwaterloo.ca
+# License: GPL 3
+# Creation Date: Sat 06 Jun 2015 10:57:17 AM EDT
+# Last Modified: Sat 06 Jun 2015 11:42:37 AM EDT
+# =================================================
+
+output_dir="$PWD"
+
+SCRIPT_NAME=$(basename $0)
+msg () {
+	echo "$SCRIPT_NAME: $@" 1>&2
+}
+warn () {
+	msg WARNING: $@
+}
+error () {
+	msg ERROR: $@
+}
+
+optstring="d:"
+while getopts "$optstring" opt; do
+	case "$opt" in
+		d)
+			output_dir="$OPTARG"
+			;;
+		:)
+			error "-$opt requires argument" 
+			;; 
+		?)
+			error invalid option
+			;; 
+	esac
+done
+shift $((OPTIND - 1))
+
+if (($# == 0)); then
+	disp_opts -h -n 10 $0 2>/dev/null
+	exit 0
+fi
+
+log="$1"
+mkdir -p $output_dir
+
+spark-daginfo -C stage "$log" > "$output_dir"/stages.csv
+spark-daginfo -C job "$log" > "$output_dir"/jobs.csv
+spark-daginfo -S "$output_dir" -C task "$log"
+cut -d, -f1,2,6 "$output_dir"/stages.csv > "$output_dir"/stage-time.csv
+num_hosts=$(ls $output_dir/tasks-*.csv | wc -l)

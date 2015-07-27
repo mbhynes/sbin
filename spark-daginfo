@@ -1,0 +1,196 @@
+#!/bin/bash
+#
+# spark-daginfo
+# =================================================
+# Author: Michael B Hynes, mbhynes@uwaterloo.ca
+# License: GPL 3
+# Creation Date: Fri 05 Jun 2015 04:27:10 PM EDT
+# Last Modified: Sat 06 Jun 2015 11:10:35 AM EDT
+# =================================================
+
+FLOAT='[[:digit:]]+\.[[:digit:]]+'
+INT='[[:digit:]]+'
+WORD='[[:alnum:]]+'
+FILE='[[:alnum:]]+\.[[:alnum:]]+'
+HOST='[[:alnum:]-]+'
+output_dir=$PWD
+
+SCRIPT_NAME=$(basename $0)
+msg () {
+	echo "$SCRIPT_NAME: $@" 1>&2
+}
+warn () {
+	msg WARNING: $@
+}
+error () {
+	msg ERROR: $@
+}
+
+get_start_time ()  
+{
+	file="$1"
+	regex=$(dateregex "$timeformat")
+	# get first match and convert it to epoch seconds
+	grep -Eo -m 1 "^$regex" "$file" \
+		| date +'%s' -f -
+	return $?
+}
+
+get_elapsed_time ()
+{
+	date -f - +'%s' \
+		| rmoffset -f '"%g,"' -a "$t0" -
+}
+
+# parse block info for worker logs
+parse_shuffleblock_fetcher_iterator()
+{
+	host=$(grep -Eo -m 1 'himrod-[[:digit:]]+' "$log")
+	msg $name
+	cat <<EOF
+s/.INFO.ShuffleBlockFetcherIterator.Getting ($INT) non-empty blocks out of ($INT) blocks.*/,\1,\2,$host/
+EOF
+}
+
+# parse block manager info on driver logs
+#t,Broadcast#,BroadcastSub#,Host
+parse_block_manager_info()
+{
+	cat <<EOF
+s/.INFO.BlockManagerInfo.*Removed broadcast_($INT)_piece($INT) on ($HOST):$INT.*/,\1,\2,\3/
+EOF
+}
+
+#t,Stage#,Task#,TID,Duration,Host,Task#,TotalTasksInStage
+parse_task()
+{
+	cat <<EOF
+s/.INFO.TaskSetManager.+Finished task ($FLOAT) in stage ($FLOAT) /,\2,\1/
+s/\(TID ($INT)\) in ($INT) ms on ($HOST) \(($INT)\/($INT)\).*/,\5,\1,\2,\3/
+EOF
+}
+
+#t,Stage#,Action,File,Line#,Duration
+parse_job()
+{
+	cat <<EOF
+s/.INFO.DAGScheduler.+Job ([[:digit:]]+) finished:/,\1/
+s/[[:space:]]*([[:alnum:]]*) at ([[:alnum:]]*\.scala):([[:digit:]]+),/,\1,\2,\3,/
+s/[[:space:]]*took[[:space:]]*([[:digit:]]+\.[[:digit:]]+) s.*/\1/
+EOF
+}
+
+parse_stage()
+{
+	cat <<EOF
+s/.INFO.DAGScheduler.Stage ($INT) \(($WORD) at ($FILE):($INT)\) finished in ($FLOAT) s.*/,\1,\2,\3,\4,\5/
+EOF
+}
+
+filter_log() {
+	spark_filter_logs \
+		-d "$delimiter" \
+		-t "$timeformat" \
+		-C "$1" \
+		-m "$log_type" \
+		"$log"
+}
+
+split_by_host() {
+	src="$1"
+	col=7
+	hosts=$(cut -d, -f$col $src | sort | uniq)
+	for h in $hosts; do
+		fname=$(sed -e s/himrod/tasks/g <<<$h).csv
+		msg "Writing task info for $h to $fname"
+		grep $h $src \
+			| cut --complement -d, -f$col \
+			> $split_hosts_output_dir/$fname
+	done
+}
+
+optstring="S:C:d:t:"
+while getopts "$optstring" opt; do
+	case "$opt" in
+		S)
+			split_hosts_output_dir="$OPTARG"
+			;;
+		C)
+			scheduler_class="$OPTARG"
+			;;
+		d)
+			delimiter="$OPTARG"
+			;;
+		t)
+			timeformat="$OPTARG"
+			;;
+		:)
+			error "-$opt requires argument" 
+			exit 1
+			;; 
+		?)
+			error invalid option
+			exit 1
+			;; 
+	esac
+done
+shift $((OPTIND - 1))
+
+if (($# == 0)); then
+	disp_opts -h -n 50 $0 2>/dev/null
+	exit 0
+fi
+
+time_in_milli=true
+if [ -z "$timeformat" ]; then
+	if [ -n "$time_in_milli" ]; then
+		timeformat='[0-9]+'
+	else
+		timeformat='%Y/%m/%d %H:%M:%S'
+	fi
+fi
+
+if [ -z "$delimiter" ]; then
+	delimiter='[ :&]'
+fi
+
+if [[ "$scheduler_class" == task ]]; then
+	class=TaskSetManager
+else
+	class=DAGScheduler
+fi
+log_type=INFO
+sed_script="parse_$scheduler_class"
+
+for log in "$@"; do
+
+	if [ ! -r "$log" ]; then
+		error "File is not readable: $log"
+		continue
+	fi
+
+	msg "running $sed_script for $scheduler_class"
+	if [[ "$scheduler_class" == task ]] && [ -n "$split_hosts_output_dir" ]; then
+		fout=$(mktemp)
+		mkdir -p "$split_hosts_output_dir"
+		filter_log $class \
+			| sed -r -f <($sed_script) \
+			| sed -e '/.*INFO.*/d; /.*ERROR.*/d; /.*WARN.*/d; /^$/d' \
+			> $fout
+		split_by_host $fout
+		rm $fout
+	else
+		filter_log $class \
+			| sed -r -f <($sed_script) \
+			| sed -e '/.*INFO.*/d; /.*ERROR.*/d; /.*WARN.*/d; /^$/d'
+	fi
+
+	# case "$scheduler_class" in
+	# 	task)
+	# 		;;
+	# 	stage)
+	# 		;;
+	# 	job)
+	# 		;;
+	# esac
+done

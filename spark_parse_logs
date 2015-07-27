@@ -8,7 +8,7 @@
 #
 # Example: (for -C DAGScheduler)
 #
-# time_elapsed,job#,action,file,line#,duration
+# clock_time (ms), job#, triggered_by, file, line#, duration (ms)
 # 	3477,157,reduce,ALS.scala,644,204.523488
 # 	3869,158,count,ALS.scala,812,392.043044
 # 	4252,159,count,ALS.scala,816,382.812292
@@ -22,6 +22,7 @@
 #		TaskSetManager)
 #		ShuffleBlockFetcherIterator)
 #		BlockManagerInfo)
+#		Stages)
 #
 # time_elapsed can be either in seconds or milliseconds, depending on 
 # the format specified in $SPARK_HOME/conf/log4j.properties.
@@ -123,26 +124,26 @@ EOF
 
 parse_log() {
 	# choose which sed script to call based on the class
-	case "$class" in
-		DAGScheduler)
-			sed_script=parse_job
+	case "$(tr 'A-Z' 'a-z' <<< "$class")" in
+		dagscheduler)
+			sed_script=parse_job 
 			;;
-		TaskSetManager)
+		tasksetmanager)
 			sed_script=parse_task
 			;;
-		ShuffleBlockFetcherIterator)
+		shuffleblockfetcheriterator)
 			sed_script=parse_shuffleblock_fetcher_iterator
 			;;
-		BlockManagerInfo)
+		blockmanagerinfo)
 			sed_script=parse_block_manager_info
 			;;
 	esac
 
 	if [ -n "$sed_script" ]; then
 		msg "Parsing $class with rule $sed_script"
-		grep "$class" "$1" \
+		grep -i "$class" "$1" \
 			| sed -r -f <($sed_script) \
-			| sed -e '/.*INFO.*/d; /.*ERROR.*/d; /.*WARN.*/d'
+			| sed -e '/.*INFO.*/d; /.*ERROR.*/d; /.*WARN.*/d; /^$/d'
 		return 0
 	fi
 	return 1
