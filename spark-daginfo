@@ -5,7 +5,7 @@
 # Author: Michael B Hynes, mbhynes@uwaterloo.ca
 # License: GPL 3
 # Creation Date: Fri 05 Jun 2015 04:27:10 PM EDT
-# Last Modified: Sat 06 Jun 2015 11:10:35 AM EDT
+# Last Modified: Tue 07 Jul 2015 11:29:54 AM EDT
 # =================================================
 
 FLOAT='[[:digit:]]+\.[[:digit:]]+'
@@ -36,8 +36,7 @@ get_start_time ()
 	return $?
 }
 
-get_elapsed_time ()
-{
+get_elapsed_time () {
 	date -f - +'%s' \
 		| rmoffset -f '"%g,"' -a "$t0" -
 }
