@@ -1,0 +1,184 @@
+#!/bin/bash
+# 
+# spark_run -d outputDir -C Class assembly.jar [extra.jar extra2.jar ...]
+#
+# spark_run -v[erbose] -L[ogsCopied] [-M slaveMem] [-N AppName] [-v(erbose)] -d outputDir -C Class assembly.jar
+# 
+# Run a spark application, assembly.jar, on the cluster. Time it, and
+# extract the ganglia metrics for the execution to -d outputDir.
+# 
+#	Optionally specify slaveMem, AppName, and (main) Class
+# 
+#	If no classname is given, you will be prompted for one, since it is
+# the entry point to Spark execution (main).
+# 
+# Extra jars to send to the driver can also be specified.
+# 
+# This script will call . spark_vars for global definitions.
+# =================================================
+# Author: Michael B Hynes, mbhynes@uwaterloo.ca
+# License: GPL 3
+# Creation Date: Tue 17 Feb 2015 10:45:57 PM EST
+# Last Modified: Wed 18 Feb 2015 12:18:24 AM EST
+# =================================================
+
+# load all defaults in spark vars
+. spark_vars
+SCRIPT_NAME=$(basename $0)
+
+msg () {
+	echo "$SCRIPT_NAME: $@" 1>&2
+}
+warn () {
+	msg WARNING: $@
+}
+error () {
+	msg ERROR: $@
+}
+get_time() {
+	date +%s
+}
+
+# parse commandline arguments
+GETOPT_STRING="m:gvj:C:M:N:d:L"
+while getopts $GETOPT_STRING opt; do
+	case $opt in
+		m)
+			if [[ "$OPTARG" =~ 'spark://' ]]; then
+				SPARK_MASTER_URL="$OPTARG"
+			else
+				SPARK_MASTER_URL="spark://$OPTARG"
+			fi
+			;;
+		g)
+			COMPILE_GANGLIA_METRICS=true
+			;;
+		M)
+			SLAVE_MEM="$OPTARG"
+			;;
+		N)
+			NAME="$OPTARG"
+			;;
+		d)
+			OUT_DIR="$OPTARG"
+			;;
+		C)
+			CLASS="$OPTARG"
+			;;
+		v)
+			VERBOSE="true"
+			;;
+		L)
+			GET_LOGS="true"
+			;;
+		:)
+			error "-$opt requires argument"
+			exit 1
+			;;
+		\?) 
+			warn "invalid option -$opt"
+			;;
+	esac
+done
+shift $((OPTIND-1))
+
+if (($# == 0)); then
+	error "No jar specified."
+	disp_opts -h -n 22 $0 2>/dev/null
+	exit 1
+fi
+
+if [ -z "$SPARK_MASTER_URL" ]; then
+	error "No spark master specified."
+	disp_opts -h -n 30 $0 2>/dev/null
+	exit 1
+fi
+
+JAR=$1
+
+if [ -z "$JAR" ] || [ ! -f "$JAR" ]; then
+	error "jar: $JAR could not be found or is not a regular file"
+	exit 1
+fi
+
+if [ -z "$OUT_DIR" ]; then
+	OUT_DIR="$PWD"
+fi
+
+if [ -z "$CLASS" ]; then
+	warn "Classname unspecified"
+	read -p "Enter classname >>> " CLASS
+fi
+
+if [ -z "$NAME" ]; then
+	NAME=$(tr 'A-Z' 'a-z' <<< "$CLASS")-$t_start
+fi
+
+if [ -z "$SLAVE_MEM" ]; then
+	SLAVE_MEM="$SPARK_MAX_MEM"
+fi
+
+if [ -z "$JAVA_IO_TMPDIR" ]; then
+	JAVA_IO_TMPDIR=/localdisk0/${USER##HIMROD-DOMAIN\\}
+fi
+
+msg "Running $JAR:$CLASS on master $SPARK_MASTER_URL and saving to $OUT_DIR."
+
+mkdir -p "$OUT_DIR"
+cd "$OUT_DIR"
+t_start=$(get_time)
+spark-submit \
+	--deploy-mode $SPARK_DEPLOY_MODE \
+	--name $NAME \
+	--class $CLASS \
+	--master $SPARK_MASTER_URL \
+	--driver-memory $SPARK_DRIVER_MEM \
+	--executor-memory $SLAVE_MEM \
+	--conf spark.executor.extraJavaOptions=-Djava.io.tmpdir=$JAVA_IO_TMPDIR \
+	$JAR \
+	$@  \
+	1> >(tee "$SPARK_LOG_STDOUT") \
+	2> "$SPARK_LOG_STDERR"
+STATUS="$?"
+t_end=$(get_time)
+
+# save t_start and t_end to filter afterwards
+echo $t_start > $SPARK_LOG_TIME
+echo $t_end >> $SPARK_LOG_TIME
+# save exit status to file in current dir
+echo $STATUS > "$SPARK_EXIT_STATUS"_"$STATUS"
+
+if [ "$STATUS" -ne 0 ]; then
+	cat <<EOF
+
+FAILURE: spark-submit exited with status "$STATUS" 
+Exiting catastrophically. 
+You may have to clean up "$SPARK_LOG_DIR/$NAME/" 
+
+EOF
+	if grep -q 'Exception in' "$SPARK_LOG_STDERR"; then
+		echo "First Exception:"
+		grep -n -A 1 -m 1 'Exception in' "$SPARK_LOG_STDERR"
+	fi
+	JOB_FAILED="true"
+fi
+
+# get event log name from the stderr
+log=$(grep -Ro -m 1 'Logging events to file:.*' $SPARK_LOG_STDERR | cut -d: -f2 | tr -d '&')
+if [ -f "$log" ]; then
+	mv "$log" .
+elif [ -f "$log.inprogress" ]; then
+	mv "$log.inprogress" .
+else
+	warn "No log with name \"$log\" was found!"
+fi
+
+if [ -n "$COMPILE_GANGLIA_METRICS" ]; then
+	# compile ganglia metrics
+	mkdir -p "$GANGLIA_DATA_DIR"
+	cd "$GANGLIA_DATA_DIR"
+	rrdcsv $GANGLIA_METRICS 1>$GANGLIA_NODE_ORDER 2>$GANGLIA_LOG_STDERR
+	cd "$OLD_PWD"
+fi
+
+exit $STATUS

@@ -53,7 +53,7 @@ cat <<EOF
 	\\begin{figure}[htb!]
 		\\centering
 		\\resizebox{#2\\columnwidth}{!}{
-			\\input{fig/#1}
+			\\input{#1}
 		}
 		\\caption{#3}
 		\\label{fig:#1}
@@ -111,6 +111,9 @@ begin_document() {
 EOF
 }
 
+twocolumn() {
+	echo '\twocolumn'
+}
 title() {
 	echo "\\title{$@}"
 }
@@ -145,6 +148,15 @@ end_document() {
 EOF
 }
 
+epstexfigure() { file=$1; shift; caption=$(tr '_' ' ' <<<$@);
+	if [ ! -r "$file" ]; then
+		return 1
+	fi
+	echo "\\EPSFIG{${file%%.tex}}{0.95}{$caption}"
+	if [ "$HAS_PLACEINS" ]; then
+		echo "\\FloatBarrier"
+	fi
+}
 
 figure() {
 	file=$1

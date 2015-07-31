@@ -8,7 +8,7 @@
 # Author: Michael B Hynes, mbhynes@uwaterloo.ca
 # License: GPL 3
 # Creation Date: Sat 11 Apr 2015 10:49:33 PM EDT
-# Last Modified: Tue 05 May 2015 09:26:39 PM EDT
+# Last Modified: Sun 12 Jul 2015 04:00:44 PM EDT
 # =================================================
 
 . spark_vars
@@ -87,7 +87,7 @@ while getopts "$optstring" opt; do
 		h)
 			print_dirname_header="true"
 			;;
-		e)
+		e )
 			print_exit_status="true"
 			;;
 		v)
@@ -157,9 +157,17 @@ for logfile in $@; do
 		if [ -f "$time_file" ]; then
 			t1=$(date -d @$(head -n 1 $logdir/spark_time) )
 			t2=$(date -d @$(tail -n 1 $logdir/spark_time) )
+			t1_num=$(date +%s -d "$t1")
+			t2_num=$(date +%s -d "$t2")
+			if grep -q -m 1 ALS "$logdir/$SPARK_LOG_STDOUT"; then
+				prog="ALS"
+			else
+				prog="PNCG"
+			fi
 			echo "$logdir: exit_status_$(cat $exit_file* 2>/dev/null)"
 			echo "		t1=$t1"
 			echo "		t2=$t2"
+			echo "		dt=$(( (t2_num - t1_num)/60 )) min ($prog)"
 		else
 			warn "$time_file does not exist"
 		fi

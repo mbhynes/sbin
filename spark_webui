@@ -1,5 +1,42 @@
 #/bin/bash
 
 . spark_vars 
-site="http://$SPARK_MASTER_IP:$SPARK_MASTER_WEBUI_PORT"
+
+# set defaults from spark_vars
+host="$SPARK_MASTER_IP"
+webui_port="$SPARK_MASTER_WEBUI_PORT"
+
+SCRIPT_NAME=$(basename $0)
+msg () {
+	echo "$SCRIPT_NAME: $@" 1>&2
+}
+warn () {
+	msg WARNING: $@
+}
+error () {
+	msg ERROR: $@
+}
+
+
+optstring="m:p:"
+while getopts "$optstring" opt; do
+	case "$opt" in
+		m)
+			host="$OPTARG"
+			;;
+		p)
+			webui_port="$OPTARG"
+			;;
+		:)
+			error "-$opt requires argument" 
+			;; 
+		?)
+			error invalid option
+			;; 
+	esac
+done
+shift $((OPTIND - 1))
+
+site="http://$host:$webui_port"
+msg "Connecting to $site"
 links $site
