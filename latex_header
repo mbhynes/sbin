@@ -149,18 +149,27 @@ EOF
 }
 
 epstexfigure() { file=$1; shift; caption=$(tr '_' ' ' <<<$@);
+	ftype=$(ext $file)
+	if [ -z "$ext" ]; then
+		file=$file.tex
+	fi
+
 	if [ ! -r "$file" ]; then
+		error "$file is not a valid file"
 		return 1
 	fi
-	echo "\\EPSFIG{${file%%.tex}}{0.95}{$caption}"
+	# remove either the .tex or the .eps extension
+	fname=${file%%.tex}
+	fname=${fname%%.eps}
+	echo "\\EPSFIG{$fname}{0.95}{$caption}"
 	if [ "$HAS_PLACEINS" ]; then
 		echo "\\FloatBarrier"
 	fi
 }
 
-figure() {
-	file=$1
+figure() { file=$1;
 	if [ ! -r "$file" ]; then
+		error "$file is not a valid file"
 		return 1
 	fi
 	caption=$(echo $2 | tr '_' ' ')
@@ -170,9 +179,9 @@ figure() {
 	fi
 }
 
-longtable() {
-	file=$1
+longtable() { file=$1;
 	if [ ! -r "$file" ]; then
+		error "$file is not a valid file"
 		return 1;
 	fi
 	caption=$(echo $2 | tr '_' ' ')
@@ -202,9 +211,9 @@ cat <<eof
 	\\end{table}
 eof
 }
-table() {
-	file=$1
+table() { file=$1;
 	if [ ! -r "$file" ]; then
+		error "$file is not a valid file"
 		return 1;
 	fi
 	if (($# == 2)); then
@@ -219,9 +228,9 @@ table() {
 	fi
 }
 
-code() {
-	file=$1
+code() { file=$1;
 	if [ ! -r "$file" ]; then
+		error "$file is not a valid file"
 		return 1;
 	fi
 	language=$2
@@ -233,9 +242,9 @@ code() {
 EOF
 }
 
-subcode() {
-	file=$1
+subcode() { file=$1;
 	if [ ! -r "$file" ]; then
+		error "$file is not a valid file"
 		return 1;
 	fi
 
