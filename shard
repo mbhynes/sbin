@@ -16,14 +16,14 @@
 # Author: Michael B Hynes, mbhynes@uwaterloo.ca
 # License: GPL 3
 # Creation Date: Tue 19 May 2015 04:46:57 PM EDT
-# Last Modified: Thu 23 Jul 2015 12:15:37 PM EDT
+# Last Modified: Wed 05 Aug 2015 06:34:03 PM EDT
 # =================================================
 
 MASTER_CLASS=org.apache.spark.deploy.master.Master
 WORKER_CLASS=org.apache.spark.deploy.worker.Worker
 SPARK_DAEMON=spark-daemon.sh
 master=""
-port=""
+port="7073"
 webui_port="8080"
 cmd="start"
 
@@ -38,7 +38,7 @@ error () {
 	msg ERROR: $@
 }
 print_all_slaves() {
-	printf "himrod-%d\n" {1..9} {16..23}
+	printf "himrod-%d\n" {1..9} {17..23}
 }
 run_master() {
 	num_errors=0
@@ -75,7 +75,7 @@ run_slaves() {
 		fi
 		if	ping -c 1 "$slave" >/dev/null; then
 			ssh -q -t $slave 2>&1 <<eof
-				$SPARK_DAEMON $cmd $WORKER_CLASS 1 "spark://$master:$port"
+				$SPARK_DAEMON $cmd $WORKER_CLASS 1 "spark://$master:$port" --cores 16
 eof
 			slave_status=$?
 			if [ "$slave_status" -gt 0 ]; then
@@ -137,7 +137,7 @@ if (($# == 0)); then
 	warn "No slaves specified."
 fi
 if [ -n "$num_slaves" ]; then
-	warn "Starting up $num_slaves slaves, from [1...23], minus [10...15]"
+	warn "Operating on $num_slaves slaves, from [1...23], minus [10...15]"
 	slaves=$(print_all_slaves | head -n $num_slaves)
 	warn "Slaves are: $slaves"
 else

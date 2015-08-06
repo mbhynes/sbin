@@ -24,13 +24,13 @@ export SPARK_HOME=~/spark/
 export SPARK_CONFIG_DIR=~/.spark
 export SPARK_SLAVE_NAMES=$(tr '\n' ' ' < $SPARK_CONFIG_DIR/slaves)
 export SPARK_NUM_SLAVES=$(wc -l < $SPARK_CONFIG_DIR/slaves)
-export SPARK_WORKER_CORES=32
+export SPARK_WORKER_CORES=16
 
 # delay between subsequent runs, in seconds
 export SPARK_RUN_DELAY=5 
 
 # node parameters
-export SPARK_DRIVER_MEM="50G"
+export SPARK_DRIVER_MEM="200G"
 export SPARK_MAX_MEM="200G"
 export SPARK_DEPLOY_MODE="client"
 

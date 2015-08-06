@@ -47,7 +47,7 @@ cat <<EOF
 
 \\date{$(date)}
 \\author{$USER@$HOSTNAME}
-\\newgeometry{left=1in,right=1in,top=0.5cm,bottom=0.5cm}
+\\newgeometry{left=2in,right=2in,top=0.5in,bottom=0.5in}
 
 \\newcommand{\\EPSFIG}[3]{
 	\\begin{figure}[htb!]
@@ -90,7 +90,7 @@ cat <<EOF
 }
 
 \\newcommand{\\CODE}[2]{
-	\\lstinputlisting[language=#2]{#1}
+	\\lstinputlisting[numbers=left,language=#2]{#1}
 }
 
 
@@ -227,7 +227,7 @@ code() {
 	language=$2
 	cat <<EOF
 {
-	\newgeometry{right=1cm,left=1cm,top=1cm,bottom=1cm}
+	\newgeometry{right=1in,left=1in,top=2cm,bottom=2cm}
 	\\CODE{$file}{$language}
 }
 EOF
