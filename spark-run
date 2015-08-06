@@ -25,6 +25,7 @@
 # load all defaults in spark vars
 . spark_vars
 SCRIPT_NAME=$(basename $0)
+executor_cores=${SPARK_WORKER_CORES:-32}
 
 msg () {
 	echo "$SCRIPT_NAME: $@" 1>&2
@@ -40,9 +41,12 @@ get_time() {
 }
 
 # parse commandline arguments
-GETOPT_STRING="m:gvj:C:M:N:d:L"
+GETOPT_STRING="c:m:gvj:C:M:N:d:L"
 while getopts $GETOPT_STRING opt; do
 	case $opt in
+		c)
+			executor_cores="$OPTARG"
+			;;
 		m)
 			if [[ "$OPTARG" =~ 'spark://' ]]; then
 				SPARK_MASTER_URL="$OPTARG"
@@ -134,6 +138,7 @@ spark-submit \
 	--master $SPARK_MASTER_URL \
 	--driver-memory $SPARK_DRIVER_MEM \
 	--executor-memory $SLAVE_MEM \
+	--executor-cores "$executor_cores" \
 	--conf spark.executor.extraJavaOptions=-Djava.io.tmpdir=$JAVA_IO_TMPDIR \
 	$JAR \
 	$@  \
